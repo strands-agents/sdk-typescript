@@ -214,19 +214,13 @@ interface messages {
     name: string,
     /// Identifier correlating this call with its result.
     tool-use-id: string,
-    /// Arguments as a JSON value. Shape is tool-specific and not
-    /// constrained by this contract; the recipient interprets it
-    /// according to the tool's input schema.
+    /// Arguments as a JSON value; shape is tool-specific.
     input: string,
-    /// Reasoning signature from thinking models (e.g. Gemini). Must be
-    /// preserved and sent back to the model for multi-turn tool use.
+    /// Reasoning signature from thinking models. Round-trip back to the model.
     reasoning-signature: option<string>,
   }
 
-  /// Whether a tool invocation succeeded. Richer failure classification
-  /// (cancelled, timed-out, invalid-input) lives on `tools.tool-error`
-  /// and is carried on `lifecycle-event::after-tool-call.error` or on a
-  /// failed `tool-stream-event::error`.
+  /// Whether a tool invocation succeeded. Richer classification lives on `tools.tool-error`.
   enum tool-result-status {
     /// Tool completed successfully.
     success,
@@ -234,9 +228,7 @@ interface messages {
     error,
   }
 
-  /// A block that can appear inside a `tool-result-block.content` array.
-  /// Narrower than `content-block` since nested tool calls and citations
-  /// are not valid tool output.
+  /// Block valid inside `tool-result-block.content`. Narrower than `content-block`.
   variant tool-result-content {
     /// Text output.
     text(text-block),

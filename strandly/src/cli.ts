@@ -241,9 +241,8 @@ function generate(opts?: { check?: boolean }): void {
     }
   }
 
-  // Generate Python types from WIT. Runs from the repo root via the
-  // shared venv (componentize-py lives there).
-  run(`${VENV}/bin/python strandly/scripts/generate_types.py`)
+  // Generate Python types from WIT via wasmtime-py's component bindgen.
+  run(`${VENV}/bin/python -m wasmtime.component.bindgen wit -o strands-py-wasm/src/strands/_generated.py`)
 
   // Ensure TS + WASM are built first.
   if (!existsSync(join(ROOT, 'strands-wasm/dist/strands-agent.wasm'))) {

@@ -27,24 +27,6 @@ mkdirSync('dist', { recursive: true });
 
 const witDir = resolve(import.meta.dirname, '..', 'wit');
 
-// Plugin: redirect @smithy/eventstream-codec's splitMessage to our patched
-// version that strips CRC32 validation (redundant over TLS, fails in WASI).
-// Patch: componentize-js hands out views into a WASI buffer that gets reused
-// on the next read. The AWS SDK's getChunkedStream processes chunks lazily,
-// so by the time it reads the data the buffer may be overwritten. Our patch
-// copies each chunk immediately on receipt.
-// TODO: file upstream on bytecodealliance/componentize-js
-const patchWasiBufferReuse = {
-  name: 'patch-wasi-buffer-reuse',
-  setup(build) {
-    build.onResolve({ filter: /getChunkedStream/ }, (args) => {
-      if (args.importer.includes('@smithy/eventstream-serde')) {
-        return { path: resolve(import.meta.dirname, 'patches/getChunkedStream.js') };
-      }
-    });
-  },
-};
-
 // 1. Bundle: resolve all imports into a single ESM file.
 await build({
   entryPoints: ['entry.ts'],
@@ -56,7 +38,6 @@ await build({
   external: ['strands:*', 'fs', 'path'],
   outfile: 'dist/bundle.js',
   logLevel: 'info',
-  plugins: [patchWasiBufferReuse],
 });
 
 // 2. Componentize: compile the bundle into a WASM component.

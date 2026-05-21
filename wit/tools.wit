@@ -62,6 +62,13 @@ interface tools {
     error(tool-error),
   }
 
+  /// Pull-based stream of tool events. Sync-WIT placeholder for
+  /// `stream<tool-stream-event>`.
+  resource tool-event-stream {
+    /// Pull the next event. `none` after the terminal `complete` or `error`.
+    read: func() -> option<tool-stream-event>;
+  }
+
   /// Why a tool call failed.
   variant tool-error {
     /// No tool registered under the given name.
@@ -87,9 +94,9 @@ interface tools {
 /// zero or more `data(...)` events before terminating with `complete` or
 /// `error`.
 interface tool-provider {
-  use tools.{call-tool-args, tool-stream-event};
+  use tools.{call-tool-args, tool-event-stream};
 
   /// Execute a tool. Iterate the returned stream to completion; the
   /// final event is `complete(...)` on success or `error(...)` on failure.
-  call-tool: func(args: call-tool-args) -> stream<tool-stream-event>;
+  call-tool: func(args: call-tool-args) -> tool-event-stream;
 }

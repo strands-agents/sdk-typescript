@@ -1,5 +1,5 @@
 /**
- * WASM component — exports strands:agent/api.
+ * WASM component exporting strands:agent/api.
  *
  * The Agent resource holds a TS SDK Agent instance across multiple
  * generate() calls. Each generate() returns a response-stream whose
@@ -15,7 +15,6 @@
 /// <reference path="./generated/interfaces/strands-agent-tools.d.ts" />
 /// <reference path="./generated/interfaces/strands-agent-sessions.d.ts" />
 /// <reference path="./generated/interfaces/strands-agent-conversation.d.ts" />
-/// <reference path="./generated/interfaces/strands-agent-host-log.d.ts" />
 /// <reference path="./generated/interfaces/strands-agent-tool-provider.d.ts" />
 
 import type { AgentConfig, InvokeArgs, RespondArgs, AgentError } from 'strands:agent/api@0.1.0'
@@ -28,10 +27,9 @@ import type {
   AgentMetrics as WitAgentMetrics,
 } from 'strands:agent/streaming@0.1.0'
 import type { ModelConfig as WitModelConfig, ModelParams as WitModelParams } from 'strands:agent/models@0.1.0'
-import type { ToolSpec, ToolChoice as WitToolChoice, ToolStreamEvent } from 'strands:agent/tools@0.1.0'
+import type { ToolSpec, ToolChoice as WitToolChoice } from 'strands:agent/tools@0.1.0'
 
 import { callTool } from 'strands:agent/tool-provider@0.1.0'
-import { log as hostLog } from 'strands:agent/host-log@0.1.0'
 import { Agent, FunctionTool, SessionManager, FileStorage } from '@strands-agents/sdk'
 import { S3Storage } from '@strands-agents/sdk/session/s3-storage'
 import { AnthropicModel } from '@strands-agents/sdk/models/anthropic'
@@ -43,8 +41,6 @@ import type {
   AgentStreamEvent,
   Model,
   BaseModelConfig,
-  Plugin,
-  LocalAgent,
   Usage,
   Metrics,
   AgentResult,
@@ -56,7 +52,6 @@ import type {
   ToolChoice,
   ModelStreamEvent,
   ContentBlock,
-  ToolStreamEvent as SdkToolStreamEvent,
   SaveLatestStrategy,
   JSONValue,
 } from '@strands-agents/sdk'
@@ -65,34 +60,12 @@ import {
   NullConversationManager,
   SlidingWindowConversationManager,
   SummarizingConversationManager,
-  AfterInvocationEvent,
-  AfterModelCallEvent,
-  AfterToolCallEvent,
-  AfterToolsEvent,
-  AgentResultEvent,
-  BeforeInvocationEvent,
-  BeforeModelCallEvent,
-  BeforeToolCallEvent,
-  BeforeToolsEvent,
-  ContentBlockEvent,
-  InitializedEvent,
-  MessageAddedEvent,
-  ModelMessageEvent,
-  ModelStreamUpdateEvent,
-  ToolResultEvent,
-  ToolStreamUpdateEvent,
 } from '@strands-agents/sdk'
 import { z } from 'zod'
 
 //
 // --- logging + error helpers --------------------------------------------
 //
-
-type LogLevel = 'trace' | 'debug' | 'info' | 'warn' | 'error'
-
-function glog(level: LogLevel, message: string, context?: Record<string, unknown>): void {
-  hostLog({ level, message, context: context ? JSON.stringify(context) : undefined })
-}
 
 function errorMessage(err: unknown): string {
   return err instanceof Error ? err.message : String(err)
@@ -146,14 +119,38 @@ function mapMetrics(src: Partial<Metrics> | null | undefined): WitStopEvent['met
   return { latencyMs: typeof src.latencyMs === 'number' ? src.latencyMs : 0 }
 }
 
-/** Serialize a TS SDK Message to the WIT shape by round-tripping through JSON. */
+/** Serialize a TS SDK Message to the WIT shape. */
 function mapMessage(message: Message): WitMessage {
-  return JSON.parse(JSON.stringify(message)) as WitMessage
+  return {
+    role: message.role,
+    content: message.content.map(mapContentBlock),
+    metadata: message.metadata
+      ? (JSON.parse(JSON.stringify(message.metadata)) as WitMessage['metadata'])
+      : undefined,
+  } as WitMessage
 }
 
-/** Serialize a TS SDK ContentBlock to the WIT shape. */
+/** Serialize a TS SDK ContentBlock to the WIT tagged-variant shape. */
 function mapContentBlock(block: ContentBlock): import('strands:agent/messages@0.1.0').ContentBlock {
-  return JSON.parse(JSON.stringify(block)) as import('strands:agent/messages@0.1.0').ContentBlock
+  type WitBlock = import('strands:agent/messages@0.1.0').ContentBlock
+  // block.type is the SDK class discriminator; toJSON drops class identity but keeps fields.
+  const payload = JSON.parse(JSON.stringify(block))
+  switch (block.type) {
+    case 'textBlock': return { tag: 'text', val: payload } as WitBlock
+    case 'toolUseBlock': return { tag: 'tool-use', val: payload } as WitBlock
+    case 'toolResultBlock': return { tag: 'tool-result', val: payload } as WitBlock
+    case 'reasoningBlock': return { tag: 'reasoning', val: payload } as WitBlock
+    case 'cachePointBlock': return { tag: 'cache-point', val: payload } as WitBlock
+    case 'imageBlock': return { tag: 'image', val: payload } as WitBlock
+    case 'videoBlock': return { tag: 'video', val: payload } as WitBlock
+    case 'documentBlock': return { tag: 'document', val: payload } as WitBlock
+    case 'citationsBlock': return { tag: 'citations', val: payload } as WitBlock
+    case 'guardContentBlock': return { tag: 'guard-content', val: payload } as WitBlock
+    default: {
+      block satisfies never
+      throw new Error(`unknown content block: ${(block as { type: string }).type}`)
+    }
+  }
 }
 
 //
@@ -232,14 +229,28 @@ function mapEvent(event: AgentStreamEvent): WitStreamEvent | null {
         val: { toolResult: mapContentBlock(event.result) as unknown as import('strands:agent/messages@0.1.0').ToolResultBlock },
       }
     case 'toolStreamUpdateEvent':
-      return { tag: 'tool-stream-update', val: { data: JSON.stringify(event.event.data ?? null) } }
+      return { tag: 'tool-update', val: { data: JSON.stringify(event.event.data ?? null) } }
     case 'modelStreamUpdateEvent':
-      return { tag: 'model-stream-update', val: { event: JSON.stringify(event.event) } }
+      return { tag: 'model-update', val: { event: JSON.stringify(event.event) } }
     case 'agentResultEvent':
       // The terminal `stop` arm carries this data instead.
       return null
+    case 'interruptEvent':
+      return {
+        tag: 'interrupt',
+        val: {
+          id: event.interrupt.id,
+          name: event.interrupt.name,
+          reason:
+            event.interrupt.reason !== undefined
+              ? typeof event.interrupt.reason === 'string'
+                ? event.interrupt.reason
+                : JSON.stringify(event.interrupt.reason)
+              : undefined,
+        },
+      }
     default: {
-      const _: never = event
+      event satisfies never
       return null
     }
   }
@@ -324,7 +335,7 @@ function createModel(config?: WitModelConfig, params?: WitModelParams): Model<Ba
       // Phase 2: wire `model-provider` host interface.
       throw new Error(`model-config.custom is not implemented yet (provider-id: ${config.val.providerId})`)
     default: {
-      const _: never = config
+      config satisfies never
       throw new Error(`Unknown model-config arm`)
     }
   }
@@ -346,23 +357,20 @@ function createTools(specs: ToolSpec[] | undefined): FunctionTool[] | undefined 
             input: JSON.stringify(input),
             toolUseId: toolContext.toolUse.toolUseId,
           })
-          const reader = stream.getReader()
-          try {
-            for (;;) {
-              const { done, value } = await reader.read()
-              if (done) throw new Error(`tool ${spec.name} stream ended without complete/error`)
-              switch (value.tag) {
-                case 'data':
-                  // Streaming tool progress is not surfaced to the SDK caller today.
-                  continue
-                case 'complete':
-                  return value.val as unknown as JSONValue
-                case 'error':
-                  throw new Error(`tool ${spec.name} failed: ${value.val.tag}`)
-              }
+          for (;;) {
+            const value = stream.read()
+            if (value === undefined) {
+              throw new Error(`tool ${spec.name} stream ended without complete/error`)
             }
-          } finally {
-            reader.releaseLock()
+            switch (value.tag) {
+              case 'data':
+                // Streaming tool progress is not surfaced to the SDK caller today.
+                continue
+              case 'complete':
+                return value.val as unknown as JSONValue
+              case 'error':
+                throw new Error(`tool ${spec.name} failed: ${value.val.tag}`)
+            }
           }
         },
       })
@@ -396,7 +404,7 @@ function toolChoiceFromWit(tc: WitToolChoice): ToolChoice {
       return { auto: {} }
     case 'any':
       return { any: {} }
-    case 'tool':
+    case 'named':
       return { tool: { name: tc.val } }
   }
 }
@@ -475,65 +483,20 @@ function invokeInputFromWit(input: PromptInput): SdkInvokeArgs {
 // --- resources -----------------------------------------------------------
 //
 
-/**
- * TS hook events that should surface on the WIT stream but aren't part
- * of `agent.stream()`'s async-iterator output. Subscribed via the
- * plugin's `initAgent` and pushed through a queue the stream drains.
- */
-const HOOKS_TO_FORWARD = [
-  InitializedEvent,
-  BeforeInvocationEvent,
-  AfterInvocationEvent,
-  MessageAddedEvent,
-  BeforeModelCallEvent,
-  AfterModelCallEvent,
-  BeforeToolsEvent,
-  AfterToolsEvent,
-  BeforeToolCallEvent,
-  AfterToolCallEvent,
-  ContentBlockEvent,
-  ModelMessageEvent,
-  ToolResultEvent,
-  ToolStreamUpdateEvent,
-  AgentResultEvent,
-  ModelStreamUpdateEvent,
-] as const
-
-class HookForwarder implements Plugin {
-  readonly name = 'strands:wit-hook-forwarder'
-  private queue: WitStreamEvent[] = []
-
-  initAgent(agent: LocalAgent): void {
-    for (const Event of HOOKS_TO_FORWARD) {
-      agent.addHook(Event as any, (event: AgentStreamEvent) => {
-        const mapped = mapEvent(event)
-        if (mapped) this.queue.push(mapped)
-      })
-    }
-  }
-
-  drain(): WitStreamEvent[] {
-    return this.queue.splice(0)
-  }
-}
-
 class AgentImpl {
   private agent: Agent
   private defaultTools: FunctionTool[] | undefined
-  private forwarder: HookForwarder
   private sessionManager: SessionManager | undefined
 
   constructor(config: AgentConfig) {
     const model = createModel(config.model, config.modelParams)
     this.defaultTools = createTools(config.tools)
-    this.forwarder = new HookForwarder()
     this.sessionManager = createSessionManager(config)
 
     this.agent = new Agent({
       model,
       systemPrompt: buildSystemPrompt(config),
       tools: this.defaultTools,
-      plugins: [this.forwarder],
       sessionManager: this.sessionManager,
       conversationManager: createConversationManager(config),
       structuredOutputSchema: parseStructuredOutputSchema(config.structuredOutputSchema),
@@ -558,7 +521,6 @@ class AgentImpl {
     return new ResponseStreamImpl(
       this.agent,
       args.input,
-      this.forwarder,
       this.defaultTools,
       originalModel,
       structuredOutputSchema
@@ -646,25 +608,35 @@ class AgentImpl {
   }
 }
 
+class EventStreamImpl {
+  private parent: ResponseStreamImpl
+
+  constructor(parent: ResponseStreamImpl) {
+    this.parent = parent
+  }
+
+  read(): Promise<WitStreamEvent | undefined> {
+    return this.parent._pullNext()
+  }
+}
+
 class ResponseStreamImpl {
   private done = false
   private generator: AsyncGenerator<AgentStreamEvent, AgentResult | undefined, undefined>
   private interruptResolve: ((payload: string) => void) | null = null
   private agent: Agent
-  private forwarder: HookForwarder
   private defaultTools: FunctionTool[] | undefined
   private originalModel: Model<BaseModelConfig> | undefined
+  private pendingStop: WitStreamEvent | undefined
 
   constructor(
     agent: Agent,
     input: PromptInput,
-    forwarder: HookForwarder,
     defaultTools?: FunctionTool[],
     originalModel?: Model<BaseModelConfig>,
     structuredOutputSchema?: z.ZodSchema
   ) {
     this.agent = agent
-    this.forwarder = forwarder
     this.defaultTools = defaultTools
     this.originalModel = originalModel
     this.generator = agent.stream(invokeInputFromWit(input), { structuredOutputSchema })
@@ -676,42 +648,35 @@ class ResponseStreamImpl {
     if (this.defaultTools) this.agent.toolRegistry.add(this.defaultTools)
   }
 
-  events(): ReadableStream<WitStreamEvent> {
-    const self = this
-    return new ReadableStream<WitStreamEvent>({
-      async pull(controller) {
-        if (self.done) {
-          controller.close()
-          return
+  /** @internal Drains both the SDK iterator and any pending terminal stop. */
+  async _pullNext(): Promise<WitStreamEvent | undefined> {
+    if (this.pendingStop) {
+      const stop = this.pendingStop
+      this.pendingStop = undefined
+      return stop
+    }
+    if (this.done) return undefined
+    while (true) {
+      try {
+        const result = await this.generator.next()
+        if (result.done) {
+          this.done = true
+          this.restoreDefaults()
+          return result.value ? mapStopEvent(result.value) : undefined
         }
-        try {
-          const result = await self.generator.next()
-          for (const event of self.forwarder.drain()) controller.enqueue(event)
+        const mapped = mapEvent(result.value)
+        if (mapped) return mapped
+        // null means the SDK event has no on-stream representation; loop.
+      } catch (err) {
+        this.done = true
+        this.restoreDefaults()
+        return { tag: 'error', val: { tag: 'internal', val: errorMessage(err) } }
+      }
+    }
+  }
 
-          if (result.done) {
-            self.done = true
-            self.restoreDefaults()
-            if (result.value) controller.enqueue(mapStopEvent(result.value))
-            controller.close()
-            return
-          }
-
-          const mapped = mapEvent(result.value)
-          if (mapped) controller.enqueue(mapped)
-        } catch (err) {
-          self.done = true
-          self.restoreDefaults()
-          for (const event of self.forwarder.drain()) controller.enqueue(event)
-          controller.enqueue({ tag: 'error', val: { tag: 'internal', val: errorMessage(err) } })
-          controller.close()
-        }
-      },
-      cancel() {
-        self.done = true
-        self.restoreDefaults()
-        void self.generator.return(undefined)
-      },
-    })
+  events(): EventStreamImpl {
+    return new EventStreamImpl(this)
   }
 
   respond(args: RespondArgs): { tag: 'ok'; val: void } | { tag: 'err'; val: AgentError } {
@@ -734,7 +699,8 @@ class ResponseStreamImpl {
 export const api = {
   Agent: AgentImpl,
   ResponseStream: ResponseStreamImpl,
+  EventStream: EventStreamImpl,
 }
 
 // Exported for contract testing. Not used by the WASM component build.
-export { mapEvent, mapStopEvent, mapStopReason, mapUsage, mapMetrics, mapMessage, mapContentBlock, createTools, HookForwarder, createToolChoiceProxy, toolChoiceFromWit }
+export { mapEvent, mapStopEvent, mapStopReason, mapUsage, mapMetrics, mapMessage, mapContentBlock, createTools, createToolChoiceProxy, toolChoiceFromWit }

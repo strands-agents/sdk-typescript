@@ -100,9 +100,7 @@ interface mcp {
   }
 }
 
-/// Pluggable elicitation handler. MCP servers can request user input
-/// mid-tool-call; implement this interface to respond.
-///
+/// Pluggable elicitation handler for MCP servers requesting user input.
 /// Enabled per client via `mcp-client-config.elicitation-enabled`.
 interface elicitation-handler {
   /// Request for user input.
