@@ -33,7 +33,10 @@ strands-wasm/generated/
 coverage/
 
 # IDE files
-.kiro/
+.claude/*
+!.claude/skills
+.kiro/*
+!.kiro/skills
 .vscode/
 .idea/
 *.swp
