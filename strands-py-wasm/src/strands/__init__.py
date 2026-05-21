@@ -233,6 +233,22 @@ def BedrockModel(
     **extras: Any,
 ) -> Any:
     """Build a Bedrock ``model-config`` value."""
+    # The wasm bundle links the AWS SDK browser build, which has no credential
+    # chain. Resolve via botocore so users get the same behavior they'd get
+    # from any other Python AWS app (env vars, ~/.aws, SSO, IMDS, etc.).
+    if access_key_id is None and secret_access_key is None:
+        try:
+            import botocore.session
+
+            creds = botocore.session.Session().get_credentials()
+            if creds is not None:
+                frozen = creds.get_frozen_credentials()
+                access_key_id = frozen.access_key
+                secret_access_key = frozen.secret_key
+                session_token = frozen.token
+        except ImportError:
+            pass
+
     return _t.ModelConfig.bedrock(
         _t.BedrockConfig(
             model_id=model_id,

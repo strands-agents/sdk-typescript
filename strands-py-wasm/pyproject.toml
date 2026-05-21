@@ -43,6 +43,10 @@ Homepage = "https://github.com/strands-agents/sdk-typescript"
 Documentation = "https://strandsagents.com"
 
 
+[tool.hatch.metadata]
+# pgrayy-wasmtime is pinned via a git URL until upstream PRs land.
+allow-direct-references = true
+
 [tool.hatch.build.targets.wheel]
 packages = ["src/strands"]
 
