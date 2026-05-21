@@ -83,7 +83,7 @@ export interface InvocationMetricsData {
  */
 export interface AgentMetricsData {
   /**
-   * Number of agent loop cycles executed.
+   * Total number of agent loop cycles executed across all invocations.
    */
   cycleCount: number
 
@@ -98,7 +98,8 @@ export interface AgentMetricsData {
   accumulatedMetrics: Metrics
 
   /**
-   * Per-invocation metrics.
+   * Per-invocation metrics for recent invocations.
+   * Only the most recent 100 entries are retained.
    */
   agentInvocations: InvocationMetricsData[]
 
@@ -120,7 +121,7 @@ export interface AgentMetricsData {
   projectedContextSize?: number
 
   /**
-   * Total duration of all cycles in milliseconds.
+   * Total duration of all cycles across all invocations in milliseconds.
    */
   totalDuration?: number
 }
@@ -164,7 +165,7 @@ interface ToolUsageOptions {
  */
 export class AgentMetrics implements JSONSerializable<AgentMetricsData> {
   /**
-   * Number of agent loop cycles executed.
+   * Total number of agent loop cycles executed across all invocations.
    */
   readonly cycleCount: number
 
@@ -179,7 +180,9 @@ export class AgentMetrics implements JSONSerializable<AgentMetricsData> {
   readonly accumulatedMetrics: Metrics
 
   /**
-   * Per-invocation metrics.
+   * Per-invocation metrics for recent invocations.
+   * Only the most recent 100 entries are retained to prevent unbounded memory growth.
+   * For full history, collect {@link latestAgentInvocation} from each {@link AgentResult}.
    */
   readonly agentInvocations: InvocationMetricsData[]
 
@@ -203,7 +206,7 @@ export class AgentMetrics implements JSONSerializable<AgentMetricsData> {
   readonly projectedContextSize: number | undefined
 
   /**
-   * Total duration of all cycles in milliseconds.
+   * Total duration of all cycles across all invocations in milliseconds.
    */
   readonly totalDuration: number
 
@@ -273,6 +276,14 @@ export class AgentMetrics implements JSONSerializable<AgentMetricsData> {
     }
   }
 }
+
+/**
+ * Maximum number of invocation history entries retained by the Meter.
+ * Prevents unbounded memory growth on long-lived Agent instances.
+ * Users who need full history can collect per-invocation metrics
+ * from successive AgentResult objects.
+ */
+const MAX_INVOCATION_HISTORY = 100
 
 /**
  * Accumulates local metrics during agent invocation.
@@ -382,8 +393,13 @@ export class Meter {
   /**
    * Begin tracking a new agent invocation.
    * Creates a new InvocationMetricsData entry for per-invocation metrics.
+   * Evicts the oldest entry when the history exceeds MAX_INVOCATION_HISTORY.
    */
   startNewInvocation(): void {
+    if (this._agentInvocations.length >= MAX_INVOCATION_HISTORY) {
+      this._agentInvocations.shift()
+    }
+
     this._agentInvocations.push({
       cycles: [],
       usage: createEmptyUsage(),

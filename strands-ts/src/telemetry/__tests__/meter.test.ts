@@ -142,6 +142,19 @@ describe('Meter', () => {
       expect(snapshot.agentInvocations).toHaveLength(2)
       expect(snapshot.latestAgentInvocation).toBe(snapshot.agentInvocations[1])
     })
+
+    it('evicts oldest entries when exceeding max history cap', () => {
+      for (let i = 0; i < 110; i++) {
+        meter.startNewInvocation()
+        meter.startCycle()
+      }
+
+      const invocations = meter.metrics.agentInvocations
+      expect(invocations).toHaveLength(100)
+      // First retained entry is the 11th invocation (oldest 10 were evicted)
+      expect(invocations[0]!.cycles[0]!.cycleId).toBe('cycle-11')
+      expect(invocations[99]!.cycles[0]!.cycleId).toBe('cycle-110')
+    })
   })
 
   describe('startCycle', () => {
