@@ -10,6 +10,7 @@
     "type-check": "tsc --noEmit"
   },
   "dependencies": {
+    "@aws-sdk/client-cloudwatch": "^3",
     "commander": "^14",
     "tsx": "^4.21.0"
   },
