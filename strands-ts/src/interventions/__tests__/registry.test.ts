@@ -10,6 +10,8 @@ import {
   AfterModelCallEvent,
 } from '../../hooks/events.js'
 import { Message, TextBlock } from '../../types/messages.js'
+import type { LocalAgent } from '../../types/agent.js'
+import type { LifecycleObserver } from '../../types/lifecycle-observer.js'
 import { deny } from '../actions.js'
 import type { InterventionAction, Guide, Transform, Proceed } from '../actions.js'
 import { Interrupt, InterruptState } from '../../interrupt.js'
@@ -95,8 +97,8 @@ describe('InterventionRegistry', () => {
   const toolUse = { name: 'testTool', toolUseId: 'id-1', input: {} }
 
   beforeEach(() => {
-    hookRegistry = new HookRegistryImplementation()
     agent = new Agent()
+    hookRegistry = (agent as unknown as { _hooksRegistry: HookRegistryImplementation })._hooksRegistry
   })
 
   function makeBeforeInvocationEvent() {
@@ -126,20 +128,36 @@ describe('InterventionRegistry', () => {
 
   describe('constructor', () => {
     it('rejects duplicate handler names', () => {
-      expect(() => new InterventionRegistry([new DenyHandler(), new DenyHandler()], hookRegistry)).toThrow(
+      expect(() => new InterventionRegistry([new DenyHandler(), new DenyHandler()], agent)).toThrow(
         "Duplicate intervention handler name: 'deny-handler'"
       )
     })
 
     it('accepts handlers with unique names', () => {
       // No throw means success
-      new InterventionRegistry([new DenyHandler(), new GuideHandler()], hookRegistry)
+      new InterventionRegistry([new DenyHandler(), new GuideHandler()], agent)
+    })
+
+    it('invokes observeAgent on handlers that implement LifecycleObserver', () => {
+      const seen: LocalAgent[] = []
+
+      class Observer extends InterventionHandler implements LifecycleObserver {
+        readonly name = 'observer'
+        observeAgent(localAgent: LocalAgent): void {
+          seen.push(localAgent)
+        }
+      }
+
+      new InterventionRegistry([new Observer()], agent)
+
+      expect(seen).toHaveLength(1)
+      expect(seen[0]).toBe(agent)
     })
   })
 
   describe('hook registration', () => {
     it('only registers hooks for overridden methods', async () => {
-      new InterventionRegistry([new DenyHandler()], hookRegistry)
+      new InterventionRegistry([new DenyHandler()], agent)
 
       const beforeToolEvent = makeBeforeToolCallEvent()
       await hookRegistry.invokeCallbacks(beforeToolEvent)
@@ -171,7 +189,7 @@ describe('InterventionRegistry', () => {
         }
       }
 
-      new InterventionRegistry([new First(), new Second()], hookRegistry)
+      new InterventionRegistry([new First(), new Second()], agent)
 
       await hookRegistry.invokeCallbacks(makeBeforeToolCallEvent())
       expect(callOrder).toEqual(['first', 'second'])
@@ -195,7 +213,7 @@ describe('InterventionRegistry', () => {
         }
       }
 
-      new InterventionRegistry([new ToolHandler(), new ModelHandler()], hookRegistry)
+      new InterventionRegistry([new ToolHandler(), new ModelHandler()], agent)
 
       await hookRegistry.invokeCallbacks(makeBeforeToolCallEvent())
       expect(callOrder).toEqual(['tool'])
@@ -204,7 +222,7 @@ describe('InterventionRegistry', () => {
 
   describe('deny', () => {
     it('sets cancel on BeforeToolCallEvent', async () => {
-      new InterventionRegistry([new DenyHandler()], hookRegistry)
+      new InterventionRegistry([new DenyHandler()], agent)
 
       const event = makeBeforeToolCallEvent()
       await hookRegistry.invokeCallbacks(event)
@@ -223,7 +241,7 @@ describe('InterventionRegistry', () => {
         }
       }
 
-      new InterventionRegistry([new DenyHandler(), new LaterHandler()], hookRegistry)
+      new InterventionRegistry([new DenyHandler(), new LaterHandler()], agent)
 
       await hookRegistry.invokeCallbacks(makeBeforeToolCallEvent())
       expect(laterCalled).not.toHaveBeenCalled()
@@ -237,7 +255,7 @@ describe('InterventionRegistry', () => {
         }
       }
 
-      new InterventionRegistry([new InvocationDeny()], hookRegistry)
+      new InterventionRegistry([new InvocationDeny()], agent)
 
       const event = makeBeforeInvocationEvent()
       await hookRegistry.invokeCallbacks(event)
@@ -252,7 +270,7 @@ describe('InterventionRegistry', () => {
         }
       }
 
-      new InterventionRegistry([new ModelDeny()], hookRegistry)
+      new InterventionRegistry([new ModelDeny()], agent)
 
       const event = makeBeforeModelCallEvent()
       await hookRegistry.invokeCallbacks(event)
@@ -262,7 +280,7 @@ describe('InterventionRegistry', () => {
 
   describe('guide', () => {
     it('sets cancel with guidance on BeforeToolCallEvent', async () => {
-      new InterventionRegistry([new GuideHandler()], hookRegistry)
+      new InterventionRegistry([new GuideHandler()], agent)
 
       const event = makeBeforeToolCallEvent()
       await hookRegistry.invokeCallbacks(event)
@@ -277,7 +295,7 @@ describe('InterventionRegistry', () => {
         }
       }
 
-      new InterventionRegistry([new GuideHandler(), new SecondGuide()], hookRegistry)
+      new InterventionRegistry([new GuideHandler(), new SecondGuide()], agent)
 
       const event = makeBeforeToolCallEvent()
       await hookRegistry.invokeCallbacks(event)
@@ -285,7 +303,7 @@ describe('InterventionRegistry', () => {
     })
 
     it('sets retry=true and injects guidance message on AfterModelCallEvent', async () => {
-      new InterventionRegistry([new ModelGuideHandler()], hookRegistry)
+      new InterventionRegistry([new ModelGuideHandler()], agent)
 
       const event = makeAfterModelCallEvent()
       const messageCountBefore = event.agent.messages.length
@@ -301,7 +319,7 @@ describe('InterventionRegistry', () => {
 
   describe('confirm', () => {
     it('pauses agent when no response is provided', async () => {
-      new InterventionRegistry([new ConfirmHandler()], hookRegistry)
+      new InterventionRegistry([new ConfirmHandler()], agent)
 
       const event = makeBeforeToolCallEvent()
       await expect(hookRegistry.invokeCallbacks(event)).rejects.toThrow('Interrupt raised')
@@ -318,7 +336,7 @@ describe('InterventionRegistry', () => {
         }
       }
 
-      new InterventionRegistry([new ConfirmHandler(), new LaterHandler()], hookRegistry)
+      new InterventionRegistry([new ConfirmHandler(), new LaterHandler()], agent)
 
       await expect(hookRegistry.invokeCallbacks(makeBeforeToolCallEvent())).rejects.toThrow()
       expect(laterCalled).not.toHaveBeenCalled()
@@ -351,7 +369,7 @@ describe('InterventionRegistry', () => {
         ['', DENIED],
       ])('response %j → cancel=%j', async (response, expectedCancel) => {
         preloadInterruptResponse('confirm-handler', response)
-        new InterventionRegistry([new ConfirmHandler()], hookRegistry)
+        new InterventionRegistry([new ConfirmHandler()], agent)
 
         const event = makeBeforeToolCallEvent()
         await hookRegistry.invokeCallbacks(event)
@@ -374,7 +392,7 @@ describe('InterventionRegistry', () => {
       // 'yes' would pass default evaluate but fails custom
       preloadInterruptResponse('custom-approval', 'yes')
 
-      new InterventionRegistry([new CustomApprovalHandler()], hookRegistry)
+      new InterventionRegistry([new CustomApprovalHandler()], agent)
 
       const event = makeBeforeToolCallEvent()
       await hookRegistry.invokeCallbacks(event)
@@ -395,7 +413,7 @@ describe('InterventionRegistry', () => {
 
       preloadInterruptResponse('custom-approval', 'custom-yes')
 
-      new InterventionRegistry([new CustomApprovalHandler()], hookRegistry)
+      new InterventionRegistry([new CustomApprovalHandler()], agent)
 
       const event = makeBeforeToolCallEvent()
       await hookRegistry.invokeCallbacks(event)
@@ -415,7 +433,7 @@ describe('InterventionRegistry', () => {
         }
       }
 
-      new InterventionRegistry([new ConfirmHandler(), new LaterHandler()], hookRegistry)
+      new InterventionRegistry([new ConfirmHandler(), new LaterHandler()], agent)
 
       const event = makeBeforeToolCallEvent()
       await hookRegistry.invokeCallbacks(event)
@@ -435,7 +453,7 @@ describe('InterventionRegistry', () => {
         }
       }
 
-      new InterventionRegistry([new ConfirmHandler(), new LaterHandler()], hookRegistry)
+      new InterventionRegistry([new ConfirmHandler(), new LaterHandler()], agent)
 
       const event = makeBeforeToolCallEvent()
       await hookRegistry.invokeCallbacks(event)
@@ -452,7 +470,7 @@ describe('InterventionRegistry', () => {
           }
         }
 
-        new InterventionRegistry([new InlineConfirmHandler()], hookRegistry)
+        new InterventionRegistry([new InlineConfirmHandler()], agent)
 
         const event = makeBeforeToolCallEvent()
         await hookRegistry.invokeCallbacks(event)
@@ -467,7 +485,7 @@ describe('InterventionRegistry', () => {
           }
         }
 
-        new InterventionRegistry([new InlineConfirmHandler()], hookRegistry)
+        new InterventionRegistry([new InlineConfirmHandler()], agent)
 
         const event = makeBeforeToolCallEvent()
         await hookRegistry.invokeCallbacks(event)
@@ -487,7 +505,7 @@ describe('InterventionRegistry', () => {
           }
         }
 
-        new InterventionRegistry([new OtpHandler()], hookRegistry)
+        new InterventionRegistry([new OtpHandler()], agent)
 
         const event = makeBeforeToolCallEvent()
         await hookRegistry.invokeCallbacks(event)
@@ -502,7 +520,7 @@ describe('InterventionRegistry', () => {
           }
         }
 
-        new InterventionRegistry([new InlineConfirmHandler()], hookRegistry)
+        new InterventionRegistry([new InlineConfirmHandler()], agent)
 
         const event = makeBeforeToolCallEvent()
         const interruptSpy = vi.spyOn(event, 'interrupt')
@@ -518,7 +536,7 @@ describe('InterventionRegistry', () => {
           }
         }
 
-        new InterventionRegistry([new InlineConfirmHandler()], hookRegistry)
+        new InterventionRegistry([new InlineConfirmHandler()], agent)
 
         const event = makeBeforeToolCallEvent()
         await hookRegistry.invokeCallbacks(event)
@@ -537,7 +555,7 @@ describe('InterventionRegistry', () => {
           }
         }
 
-        new InterventionRegistry([new ConfirmWithOnError()], hookRegistry)
+        new InterventionRegistry([new ConfirmWithOnError()], agent)
 
         const event = makeBeforeToolCallEvent()
         await expect(hookRegistry.invokeCallbacks(event)).rejects.toThrow('Interrupt raised')
@@ -556,7 +574,7 @@ describe('InterventionRegistry', () => {
         }
       }
 
-      new InterventionRegistry([new TransformHandler()], hookRegistry)
+      new InterventionRegistry([new TransformHandler()], agent)
 
       const event = makeBeforeToolCallEvent()
       await hookRegistry.invokeCallbacks(event)
@@ -586,7 +604,7 @@ describe('InterventionRegistry', () => {
         }
       }
 
-      new InterventionRegistry([new Transformer(), new Observer()], hookRegistry)
+      new InterventionRegistry([new Transformer(), new Observer()], agent)
 
       await hookRegistry.invokeCallbacks(makeBeforeToolCallEvent())
       expect(observed).toEqual(['transformed'])
@@ -602,7 +620,7 @@ describe('InterventionRegistry', () => {
         }
       }
 
-      new InterventionRegistry([new ModelTransform()], hookRegistry)
+      new InterventionRegistry([new ModelTransform()], agent)
 
       const event = makeAfterModelCallEvent()
       await hookRegistry.invokeCallbacks(event)
@@ -617,7 +635,7 @@ describe('InterventionRegistry', () => {
         }
       }
 
-      new InterventionRegistry([new TransformHandler()], hookRegistry)
+      new InterventionRegistry([new TransformHandler()], agent)
 
       await hookRegistry.invokeCallbacks(makeBeforeToolCallEvent())
       // Transform was applied (verified by the apply fn mock tests above)
@@ -626,7 +644,7 @@ describe('InterventionRegistry', () => {
 
   describe('proceed', () => {
     it('does not mutate the event', async () => {
-      new InterventionRegistry([new ProceedHandler()], hookRegistry)
+      new InterventionRegistry([new ProceedHandler()], agent)
 
       const event = makeBeforeToolCallEvent()
       await hookRegistry.invokeCallbacks(event)
@@ -636,13 +654,13 @@ describe('InterventionRegistry', () => {
 
   describe('error handling', () => {
     it('onError=throw (default) rethrows the error', async () => {
-      new InterventionRegistry([new ThrowingHandler(), new ProceedHandler()], hookRegistry)
+      new InterventionRegistry([new ThrowingHandler(), new ProceedHandler()], agent)
 
       await expect(hookRegistry.invokeCallbacks(makeBeforeToolCallEvent())).rejects.toThrow('handler crashed')
     })
 
     it('onError=proceed skips the handler and continues to next', async () => {
-      new InterventionRegistry([new ThrowingProceedHandler(), new ProceedHandler()], hookRegistry)
+      new InterventionRegistry([new ThrowingProceedHandler(), new ProceedHandler()], agent)
 
       const event = makeBeforeToolCallEvent()
       await hookRegistry.invokeCallbacks(event)
@@ -660,7 +678,7 @@ describe('InterventionRegistry', () => {
         }
       }
 
-      new InterventionRegistry([new ThrowingDenyHandler(), new LaterHandler()], hookRegistry)
+      new InterventionRegistry([new ThrowingDenyHandler(), new LaterHandler()], agent)
 
       const event = makeBeforeToolCallEvent()
       await hookRegistry.invokeCallbacks(event)
@@ -672,7 +690,7 @@ describe('InterventionRegistry', () => {
 
   describe('async handlers', () => {
     it('awaits async handler results', async () => {
-      new InterventionRegistry([new AsyncDenyHandler()], hookRegistry)
+      new InterventionRegistry([new AsyncDenyHandler()], agent)
 
       const event = makeBeforeToolCallEvent()
       await hookRegistry.invokeCallbacks(event)
@@ -682,7 +700,7 @@ describe('InterventionRegistry', () => {
 
   describe('conflict resolution', () => {
     it('deny wins over guide', async () => {
-      new InterventionRegistry([new GuideHandler(), new DenyHandler()], hookRegistry)
+      new InterventionRegistry([new GuideHandler(), new DenyHandler()], agent)
 
       const event = makeBeforeToolCallEvent()
       await hookRegistry.invokeCallbacks(event)
@@ -691,7 +709,7 @@ describe('InterventionRegistry', () => {
     })
 
     it('deny short-circuits before guide can accumulate', async () => {
-      new InterventionRegistry([new DenyHandler(), new GuideHandler()], hookRegistry)
+      new InterventionRegistry([new DenyHandler(), new GuideHandler()], agent)
 
       const event = makeBeforeToolCallEvent()
       await hookRegistry.invokeCallbacks(event)
@@ -700,7 +718,7 @@ describe('InterventionRegistry', () => {
     })
 
     it('confirm short-circuits before guide can accumulate', async () => {
-      new InterventionRegistry([new ConfirmHandler(), new GuideHandler()], hookRegistry)
+      new InterventionRegistry([new ConfirmHandler(), new GuideHandler()], agent)
 
       await expect(hookRegistry.invokeCallbacks(makeBeforeToolCallEvent())).rejects.toThrow('Interrupt raised')
     })
@@ -787,7 +805,7 @@ describe('InterventionRegistry', () => {
         }
       }
 
-      new InterventionRegistry([new ModelGuide()], hookRegistry)
+      new InterventionRegistry([new ModelGuide()], agent)
 
       const event = makeBeforeModelCallEvent()
       const messageCountBefore = event.agent.messages.length
@@ -821,7 +839,7 @@ describe('InterventionRegistry', () => {
         }
       }
 
-      new InterventionRegistry([new BadTransform(), new AfterTransform()], hookRegistry)
+      new InterventionRegistry([new BadTransform(), new AfterTransform()], agent)
 
       const event = makeBeforeToolCallEvent()
       await hookRegistry.invokeCallbacks(event)
@@ -843,7 +861,7 @@ describe('InterventionRegistry', () => {
         }
       }
 
-      new InterventionRegistry([new BadTransform()], hookRegistry)
+      new InterventionRegistry([new BadTransform()], agent)
 
       await expect(hookRegistry.invokeCallbacks(makeBeforeToolCallEvent())).rejects.toThrow('apply boom')
     })
@@ -862,7 +880,7 @@ describe('InterventionRegistry', () => {
         }
       }
 
-      new InterventionRegistry([new InterruptOnInvocation()], hookRegistry)
+      new InterventionRegistry([new InterruptOnInvocation()], agent)
 
       await hookRegistry.invokeCallbacks(makeBeforeInvocationEvent())
       expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('has no effect'))

@@ -5,13 +5,7 @@
  * for evaluation decisions.
  */
 
-import type {
-  AfterModelCallEvent,
-  AfterToolCallEvent,
-  BeforeInvocationEvent,
-  BeforeModelCallEvent,
-  BeforeToolCallEvent,
-} from '../../../hooks/events.js'
+import type { LifecycleObserver } from '../../../types/lifecycle-observer.js'
 import type { JSONValue } from '../../../types/json.js'
 
 /**
@@ -26,11 +20,10 @@ export interface SteeringContextData {
 }
 
 /**
- * A passive observer that accumulates data from intervention lifecycle events.
+ * A passive observer that accumulates data from agent lifecycle events.
  *
- * The owning {@link SteeringHandler} feeds each event to its providers before
- * running its own decision logic. Implement only the lifecycle methods you need;
- * unimplemented methods are skipped.
+ * Providers self-register hook callbacks via {@link LifecycleObserver.observeAgent},
+ * which the owning {@link SteeringHandler} invokes once at registration time.
  *
  * Providers expose accumulated state through the `context` getter, which the
  * handler reads when making steering decisions.
@@ -41,8 +34,10 @@ export interface SteeringContextData {
  *   readonly name = 'costTracker'
  *   private _toolCalls = 0
  *
- *   afterToolCall(_event: AfterToolCallEvent): void {
- *     this._toolCalls += 1
+ *   observeAgent(agent: LocalAgent): void {
+ *     agent.addHook(AfterToolCallEvent, () => {
+ *       this._toolCalls += 1
+ *     })
  *   }
  *
  *   get context(): SteeringContextData {
@@ -51,16 +46,10 @@ export interface SteeringContextData {
  * }
  * ```
  */
-export interface SteeringContextProvider {
+export interface SteeringContextProvider extends LifecycleObserver {
   /** Identifier for this provider instance. */
   readonly name: string
 
   /** Return the current context snapshot for steering evaluation. */
   get context(): SteeringContextData
-
-  beforeInvocation?(event: BeforeInvocationEvent): void | Promise<void>
-  beforeToolCall?(event: BeforeToolCallEvent): void | Promise<void>
-  afterToolCall?(event: AfterToolCallEvent): void | Promise<void>
-  beforeModelCall?(event: BeforeModelCallEvent): void | Promise<void>
-  afterModelCall?(event: AfterModelCallEvent): void | Promise<void>
 }
