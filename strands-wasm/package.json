@@ -15,6 +15,7 @@
     "clean": "rm -rf dist node_modules package-lock.json"
   },
   "dependencies": {
+    "@aws/bedrock-token-generator": "https://github.com/pgrayy/wasm-deps/releases/download/v44.0.3/aws-bedrock-token-generator-1.1.0.tgz",
     "@strands-agents/sdk": "*",
     "zod": "^4.1.12"
   },

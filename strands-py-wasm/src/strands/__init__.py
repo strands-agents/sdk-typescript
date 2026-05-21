@@ -18,7 +18,7 @@ import inspect
 import json
 import typing
 from collections.abc import AsyncIterator, Awaitable, Callable, Iterable
-from dataclasses import asdict, dataclass, is_dataclass
+from dataclasses import asdict, is_dataclass
 from typing import Any, Protocol, TypeVar, get_type_hints, runtime_checkable
 
 from strands import _generated as _t
@@ -94,29 +94,29 @@ _ContentInput = (
 def _as_content_block(item: Any) -> Any:
     """Wrap any accepted content shape as a ``ContentBlock`` variant arm."""
     if isinstance(item, str):
-        return _t.ContentBlock.text(_t.TextBlock(text=item))
+        return _t.ContentBlock_Text(_t.TextBlock(text=item))
     if isinstance(item, _t.TextBlock):
-        return _t.ContentBlock.text(item)
+        return _t.ContentBlock_Text(item)
     if isinstance(item, _t.JsonBlock):
-        return _t.ContentBlock.json(item)
+        return _t.ContentBlock_Json(item)
     if isinstance(item, _t.ToolUseBlock):
-        return _t.ContentBlock.tool_use(item)
+        return _t.ContentBlock_ToolUse(item)
     if isinstance(item, _t.ToolResultBlock):
-        return _t.ContentBlock.tool_result(item)
+        return _t.ContentBlock_ToolResult(item)
     if isinstance(item, _t.ReasoningBlock):
-        return _t.ContentBlock.reasoning(item)
+        return _t.ContentBlock_Reasoning(item)
     if isinstance(item, _t.CachePointBlock):
-        return _t.ContentBlock.cache_point(item)
+        return _t.ContentBlock_CachePoint(item)
     if isinstance(item, _t.ImageBlock):
-        return _t.ContentBlock.image(item)
+        return _t.ContentBlock_Image(item)
     if isinstance(item, _t.VideoBlock):
-        return _t.ContentBlock.video(item)
+        return _t.ContentBlock_Video(item)
     if isinstance(item, _t.DocumentBlock):
-        return _t.ContentBlock.document(item)
+        return _t.ContentBlock_Document(item)
     if isinstance(item, _t.CitationsBlock):
-        return _t.ContentBlock.citations(item)
+        return _t.ContentBlock_Citations(item)
     if isinstance(item, _t.InterruptResponseBlock):
-        return _t.ContentBlock.interrupt_response(item)
+        return _t.ContentBlock_InterruptResponse(item)
     return item  # already a ContentBlock variant
 
 
@@ -133,12 +133,12 @@ class ImageBlock(_t.ImageBlock):
         if len(provided) != 1:
             raise ValueError("ImageBlock requires exactly one of bytes, url, or s3")
         if bytes is not None:
-            source = _t.ImageSource.bytes(bytes)
+            source = _t.ImageSource_Bytes(bytes)
         elif url is not None:
-            source = _t.ImageSource.url(url)
+            source = _t.ImageSource_Url(url)
         else:
             assert s3 is not None
-            source = _t.ImageSource.s3(s3)
+            source = _t.ImageSource_S3(s3)
         super().__init__(format=format, source=source)
 
 
@@ -152,7 +152,7 @@ class VideoBlock(_t.VideoBlock):
     ) -> None:
         if (bytes is None) == (s3 is None):
             raise ValueError("VideoBlock requires exactly one of bytes or s3")
-        source = _t.VideoSource.bytes(bytes) if bytes is not None else _t.VideoSource.s3(s3)
+        source = _t.VideoSource_Bytes(bytes) if bytes is not None else _t.VideoSource_S3(s3)
         super().__init__(format=format, source=source)
 
 
@@ -173,14 +173,14 @@ class DocumentBlock(_t.DocumentBlock):
         if len(provided) != 1:
             raise ValueError("DocumentBlock requires exactly one of bytes, text, content, or s3")
         if bytes is not None:
-            source = _t.DocumentSource.bytes(bytes)
+            source = _t.DocumentSource_Bytes(bytes)
         elif text is not None:
-            source = _t.DocumentSource.text(text)
+            source = _t.DocumentSource_Text(text)
         elif content is not None:
-            source = _t.DocumentSource.content(content)
+            source = _t.DocumentSource_Content(content)
         else:
             assert s3 is not None
-            source = _t.DocumentSource.s3(s3)
+            source = _t.DocumentSource_S3(s3)
         super().__init__(
             name=name,
             format=format,
@@ -249,7 +249,7 @@ def BedrockModel(
         except ImportError:
             pass
 
-    return _t.ModelConfig.bedrock(
+    return _t.ModelConfig_Bedrock(
         _t.BedrockConfig(
             model_id=model_id,
             region=region,
@@ -262,19 +262,19 @@ def BedrockModel(
 
 
 def AnthropicModel(model_id: str | None = None, *, api_key: str | None = None, **extras: Any) -> Any:
-    return _t.ModelConfig.anthropic(
+    return _t.ModelConfig_Anthropic(
         _t.AnthropicConfig(model_id=model_id, api_key=api_key, additional_config=_extras_to_json(extras))
     )
 
 
 def OpenAIModel(model_id: str | None = None, *, api_key: str | None = None, **extras: Any) -> Any:
-    return _t.ModelConfig.openai(
+    return _t.ModelConfig_Openai(
         _t.OpenaiConfig(model_id=model_id, api_key=api_key, additional_config=_extras_to_json(extras))
     )
 
 
 def GoogleModel(model_id: str | None = None, *, api_key: str | None = None, **extras: Any) -> Any:
-    return _t.ModelConfig.gemini(
+    return _t.ModelConfig_Gemini(
         _t.GeminiConfig(model_id=model_id, api_key=api_key, additional_config=_extras_to_json(extras))
     )
 
@@ -287,7 +287,7 @@ def CustomModel(
     **extras: Any,
 ) -> Any:
     """Host-implemented provider. Pair with a ``model-provider`` callback."""
-    return _t.ModelConfig.custom(
+    return _t.ModelConfig_Custom(
         _t.CustomModelConfig(
             provider_id=provider_id,
             model_id=model_id,
@@ -359,22 +359,41 @@ class Tool:
 
 def _coerce_tool_result(result: Any) -> list[Any]:
     if isinstance(result, str):
-        return [_t.ToolResultContent.text(_t.TextBlock(text=result))]
+        return [_t.ToolResultContent_Text(_t.TextBlock(text=result))]
     if isinstance(result, _t.TextBlock):
-        return [_t.ToolResultContent.text(result)]
+        return [_t.ToolResultContent_Text(result)]
     if isinstance(result, _t.JsonBlock):
-        return [_t.ToolResultContent.json(result)]
+        return [_t.ToolResultContent_Json(result)]
     if isinstance(result, dict):
-        return [_t.ToolResultContent.json(_t.JsonBlock(json=json.dumps(result)))]
+        return [_t.ToolResultContent_Json(_t.JsonBlock(json=json.dumps(result)))]
     if is_dataclass(result) and not isinstance(result, type):
-        return [_t.ToolResultContent.json(_t.JsonBlock(json=json.dumps(asdict(result))))]
+        return [_t.ToolResultContent_Json(_t.JsonBlock(json=json.dumps(asdict(result))))]
     if isinstance(result, list):
         return result
-    return [_t.ToolResultContent.text(_t.TextBlock(text=str(result)))]
+    return [_t.ToolResultContent_Text(_t.TextBlock(text=str(result)))]
 
 
 def _py_type_to_schema(py_type: Any) -> dict[str, Any]:
+    import types
+
     origin = typing.get_origin(py_type)
+
+    # Strip Annotated[T, ...] -- only the runtime type matters for the schema.
+    if origin is typing.Annotated:
+        return _py_type_to_schema(typing.get_args(py_type)[0])
+
+    # Optional[T] / Union[T, None] / T | None: emit T's schema and mark nullable.
+    if origin is typing.Union or origin is types.UnionType:
+        args = typing.get_args(py_type)
+        non_none = [a for a in args if a is not type(None)]
+        nullable = len(non_none) != len(args)
+        if len(non_none) == 1:
+            schema = _py_type_to_schema(non_none[0])
+            if nullable:
+                schema = {**schema, "nullable": True}
+            return schema
+        return {}  # heterogeneous union -- caller should supply input_schema
+
     if py_type is str:
         return {"type": "string"}
     if py_type is int:
@@ -388,6 +407,8 @@ def _py_type_to_schema(py_type: Any) -> dict[str, Any]:
         return {"type": "array", "items": _py_type_to_schema(args[0]) if args else {}}
     if origin is dict:
         return {"type": "object"}
+    if origin is typing.Literal:
+        return {"enum": list(typing.get_args(py_type))}
     return {}
 
 
@@ -423,13 +444,13 @@ def tool(
 
 def NullConversationManager() -> Any:
     """No management. History grows without bound."""
-    return _t.ConversationManagerConfig.none()
+    return _t.ConversationManagerConfig_None()
 
 
 def SlidingWindowConversationManager(
     *, window_size: int = 40, should_truncate_results: bool = True
 ) -> Any:
-    return _t.ConversationManagerConfig.sliding_window(
+    return _t.ConversationManagerConfig_SlidingWindow(
         _t.SlidingWindowConfig(window_size=window_size, should_truncate_results=should_truncate_results)
     )
 
@@ -441,7 +462,7 @@ def SummarizingConversationManager(
     summarization_system_prompt: str | None = None,
     summarization_model: Any = None,
 ) -> Any:
-    return _t.ConversationManagerConfig.summarizing(
+    return _t.ConversationManagerConfig_Summarizing(
         _t.SummarizingConfig(
             summary_ratio=summary_ratio,
             preserve_recent_messages=preserve_recent_messages,
@@ -460,7 +481,7 @@ def _optional_ns(seconds: float | None) -> int | None:
 
 
 def ConstantBackoff(*, delay: float = 1.0) -> Any:
-    return _t.BackoffStrategy.constant(_t.ConstantBackoffConfig(delay=_seconds_to_ns(delay)))
+    return _t.BackoffStrategy_Constant(_t.ConstantBackoffConfig(delay=_seconds_to_ns(delay)))
 
 
 def LinearBackoff(
@@ -469,7 +490,7 @@ def LinearBackoff(
     max: float = 30.0,
     jitter: _t.JitterKind = _t.JitterKind.FULL,
 ) -> Any:
-    return _t.BackoffStrategy.linear(
+    return _t.BackoffStrategy_Linear(
         _t.LinearBackoffConfig(base=_seconds_to_ns(base), max=_seconds_to_ns(max), jitter=jitter)
     )
 
@@ -481,7 +502,7 @@ def ExponentialBackoff(
     factor: float = 2.0,
     jitter: _t.JitterKind = _t.JitterKind.FULL,
 ) -> Any:
-    return _t.BackoffStrategy.exponential(
+    return _t.BackoffStrategy_Exponential(
         _t.ExponentialBackoffConfig(
             base=_seconds_to_ns(base),
             max=_seconds_to_ns(max),
@@ -507,16 +528,16 @@ class ModelRetryStrategy(_t.ModelRetryStrategy):
 
 
 def FileStorage(base_dir: str) -> Any:
-    return _t.StorageConfig.file(_t.FileStorageConfig(base_dir=base_dir))
+    return _t.StorageConfig_File(_t.FileStorageConfig(base_dir=base_dir))
 
 
 def S3Storage(*, bucket: str, region: str | None = None, prefix: str | None = None) -> Any:
-    return _t.StorageConfig.s3(_t.S3StorageConfig(bucket=bucket, region=region, prefix=prefix))
+    return _t.StorageConfig_S3(_t.S3StorageConfig(bucket=bucket, region=region, prefix=prefix))
 
 
 def CustomStorage(backend_id: str) -> Any:
     """Host-implemented backend. Pair with a ``snapshot-storage`` handler."""
-    return _t.StorageConfig.custom(_t.CustomStorageConfig(backend_id=backend_id))
+    return _t.StorageConfig_Custom(_t.CustomStorageConfig(backend_id=backend_id))
 
 
 class SessionManager(_t.SessionConfig):
@@ -553,7 +574,7 @@ def AgentNode(
     description: str | None = None,
     timeout: float | None = None,
 ) -> Any:
-    return _t.NodeConfig.agent(
+    return _t.NodeConfig_Agent(
         _t.AgentNodeConfig(
             id=id,
             description=description,
@@ -564,7 +585,7 @@ def AgentNode(
 
 
 def MultiAgentNode(*, id: str, orchestrator: Any, description: str | None = None) -> Any:
-    return _t.NodeConfig.multi_agent(
+    return _t.NodeConfig_MultiAgent(
         _t.MultiAgentNodeConfig(
             id=id,
             description=description,
@@ -620,15 +641,15 @@ class Swarm(_t.SwarmConfig):
 
 
 def BashTool(*, default_timeout: int | None = None) -> Any:
-    return _t.VendedTool.bash(_t.BashToolConfig(default_timeout_s=default_timeout))
+    return _t.VendedTool_Bash(_t.BashToolConfig(default_timeout_s=default_timeout))
 
 
 def FileEditorTool(*, workspace_root: str | None = None) -> Any:
-    return _t.VendedTool.file_editor(_t.FileEditorToolConfig(workspace_root=workspace_root))
+    return _t.VendedTool_FileEditor(_t.FileEditorToolConfig(workspace_root=workspace_root))
 
 
 def HttpRequestTool(*, allowed_hosts: list[str] | None = None, max_response_bytes: int = 0) -> Any:
-    return _t.VendedTool.http_request(
+    return _t.VendedTool_HttpRequest(
         _t.HttpRequestToolConfig(
             allowed_hosts=allowed_hosts or [],
             max_response_bytes=max_response_bytes,
@@ -637,7 +658,7 @@ def HttpRequestTool(*, allowed_hosts: list[str] | None = None, max_response_byte
 
 
 def NotebookTool(*, workspace_root: str | None = None) -> Any:
-    return _t.VendedTool.notebook(_t.NotebookToolConfig(workspace_root=workspace_root))
+    return _t.VendedTool_Notebook(_t.NotebookToolConfig(workspace_root=workspace_root))
 
 
 def SkillsPlugin(
@@ -647,7 +668,7 @@ def SkillsPlugin(
     max_resource_files: int | None = None,
     state_key: str | None = None,
 ) -> Any:
-    return _t.VendedPlugin.skills(
+    return _t.VendedPlugin_Skills(
         _t.SkillsPluginConfig(
             skills=[_t.SkillSource(path=p) for p in skills],
             strict=strict,
@@ -663,7 +684,7 @@ def ContextOffloaderPlugin(
     preview_tokens: int | None = None,
     include_retrieval_tool: bool = True,
 ) -> Any:
-    return _t.VendedPlugin.context_offloader(
+    return _t.VendedPlugin_ContextOffloader(
         _t.ContextOffloaderPluginConfig(
             max_result_tokens=max_result_tokens,
             preview_tokens=preview_tokens,
@@ -680,7 +701,7 @@ def StdioMcpTransport(
     cwd: str | None = None,
 ) -> Any:
     """Launch an MCP server as a subprocess and talk to it over stdio."""
-    return _t.McpTransport.stdio(
+    return _t.McpTransport_Stdio(
         _t.StdioTransportConfig(
             command=command,
             args=args or [],
@@ -692,7 +713,7 @@ def StdioMcpTransport(
 
 def StreamableHttpMcpTransport(*, url: str, headers: dict[str, str] | None = None) -> Any:
     """Talk to a hosted MCP server over streamable HTTP."""
-    return _t.McpTransport.streamable_http(
+    return _t.McpTransport_StreamableHttp(
         _t.HttpTransportConfig(
             url=url,
             headers=[_t.HttpHeader(name=k, value=v) for k, v in (headers or {}).items()],
@@ -702,7 +723,7 @@ def StreamableHttpMcpTransport(*, url: str, headers: dict[str, str] | None = Non
 
 def SseMcpTransport(*, url: str, headers: dict[str, str] | None = None) -> Any:
     """Legacy SSE transport."""
-    return _t.McpTransport.sse(
+    return _t.McpTransport_Sse(
         _t.SseTransportConfig(
             url=url,
             headers=[_t.HttpHeader(name=k, value=v) for k, v in (headers or {}).items()],
@@ -752,193 +773,6 @@ class InterruptResponse(_t.RespondArgs):
         super().__init__(interrupt_id=interrupt_id, response=payload)
 
 
-# --- SDK-level StreamEvent class hierarchy -----------------------------
-# Wire ``StreamEvent`` is a tagged ``Variant``; we lift it at the runtime
-# boundary so user code can dispatch with ``isinstance``.
-
-class StreamEventBase:
-    """Base for all stream events. Subclasses correspond one-to-one to the
-    arms of the wire ``stream-event`` variant."""
-
-    tag: typing.ClassVar[str]
-
-
-@dataclass
-class StreamEventTextDelta(StreamEventBase):
-    tag = "text-delta"
-    value: str
-
-
-@dataclass
-class StreamEventToolUse(StreamEventBase):
-    tag = "tool-use"
-    value: _t.ToolUseBlock
-
-
-@dataclass
-class StreamEventToolResult(StreamEventBase):
-    tag = "tool-result"
-    value: _t.ToolResultBlock
-
-
-@dataclass
-class StreamEventContent(StreamEventBase):
-    tag = "content"
-    value: Any  # ContentBlock variant arm
-
-
-@dataclass
-class StreamEventMetadata(StreamEventBase):
-    tag = "metadata"
-    value: _t.MetadataEvent
-
-
-@dataclass
-class StreamEventStop(StreamEventBase):
-    tag = "stop"
-    value: _t.StopEvent
-
-
-@dataclass
-class StreamEventRedaction(StreamEventBase):
-    tag = "redaction"
-    value: _t.RedactionEvent
-
-
-@dataclass
-class StreamEventError(StreamEventBase):
-    tag = "error"
-    value: Any  # StreamError variant
-
-
-@dataclass
-class StreamEventInterrupt(StreamEventBase):
-    tag = "interrupt"
-    value: _t.Interrupt
-
-
-@dataclass
-class StreamEventInitialized(StreamEventBase):
-    tag = "initialized"
-
-
-@dataclass
-class StreamEventBeforeInvocation(StreamEventBase):
-    tag = "before-invocation"
-    value: _t.BeforeInvocationData
-
-
-@dataclass
-class StreamEventAfterInvocation(StreamEventBase):
-    tag = "after-invocation"
-    value: _t.AfterInvocationData
-
-
-@dataclass
-class StreamEventMessageAdded(StreamEventBase):
-    tag = "message-added"
-    value: _t.MessageAddedData
-
-
-@dataclass
-class StreamEventBeforeModelCall(StreamEventBase):
-    tag = "before-model-call"
-    value: _t.BeforeModelCallData
-
-
-@dataclass
-class StreamEventAfterModelCall(StreamEventBase):
-    tag = "after-model-call"
-    value: _t.AfterModelCallData
-
-
-@dataclass
-class StreamEventBeforeTools(StreamEventBase):
-    tag = "before-tools"
-    value: _t.ToolsBatchData
-
-
-@dataclass
-class StreamEventAfterTools(StreamEventBase):
-    tag = "after-tools"
-    value: _t.ToolsBatchData
-
-
-@dataclass
-class StreamEventBeforeToolCall(StreamEventBase):
-    tag = "before-tool-call"
-    value: _t.BeforeToolCallData
-
-
-@dataclass
-class StreamEventAfterToolCall(StreamEventBase):
-    tag = "after-tool-call"
-    value: _t.AfterToolCallData
-
-
-@dataclass
-class StreamEventContentBlock(StreamEventBase):
-    tag = "content-block"
-    value: _t.ContentBlockData
-
-
-@dataclass
-class StreamEventModelMessage(StreamEventBase):
-    tag = "model-message"
-    value: _t.ModelMessageData
-
-
-@dataclass
-class StreamEventToolResultHook(StreamEventBase):
-    tag = "tool-result-hook"
-    value: _t.ToolResultData
-
-
-@dataclass
-class StreamEventToolUpdate(StreamEventBase):
-    tag = "tool-update"
-    value: _t.ToolStreamUpdateData
-
-
-@dataclass
-class StreamEventModelUpdate(StreamEventBase):
-    tag = "model-update"
-    value: _t.ModelStreamUpdateData
-
-
-@dataclass
-class StreamEventAgentResult(StreamEventBase):
-    tag = "agent-result"
-    value: _t.AgentResultData
-
-
-_STREAM_EVENT_CLASSES: dict[str, type[StreamEventBase]] = {
-    cls.tag: cls
-    for cls in (
-        StreamEventTextDelta, StreamEventToolUse, StreamEventToolResult,
-        StreamEventContent, StreamEventMetadata, StreamEventStop,
-        StreamEventRedaction, StreamEventError, StreamEventInterrupt,
-        StreamEventInitialized, StreamEventBeforeInvocation,
-        StreamEventAfterInvocation, StreamEventMessageAdded,
-        StreamEventBeforeModelCall, StreamEventAfterModelCall,
-        StreamEventBeforeTools, StreamEventAfterTools,
-        StreamEventBeforeToolCall, StreamEventAfterToolCall,
-        StreamEventContentBlock, StreamEventModelMessage,
-        StreamEventToolResultHook, StreamEventToolUpdate,
-        StreamEventModelUpdate, StreamEventAgentResult,
-    )
-}
-
-
-def _lift_stream_event(wire: Any) -> StreamEventBase:
-    """Convert a wire ``Variant("text-delta" | ..., payload)`` into an SDK class."""
-    cls = _STREAM_EVENT_CLASSES.get(wire.tag)
-    if cls is None:
-        raise ValueError(f"unknown stream-event arm: {wire.tag!r}")
-    if cls is StreamEventInitialized:
-        return cls()
-    return cls(value=wire.payload)
-
 
 _ToolInput = Tool | PydanticTool | Callable[..., Any]
 _ToolChoiceInput = Any  # tagged ToolChoice variant or "name" shorthand or None
@@ -953,22 +787,21 @@ def _coerce_tool(item: _ToolInput) -> Tool | PydanticTool:
 
 
 def _coerce_prompt(value: Any) -> Any:
-    """Build a wire ``prompt-input`` variant from a string, content blocks, or pre-built variant."""
+    """Coerce a string, content blocks, or pre-built value to a ``prompt-input``."""
     if isinstance(value, str):
-        return _t.PromptInput.text(value)
-    # Untagged variant: a list of content blocks is itself a valid PromptInput payload.
+        return value
     if isinstance(value, list):
-        return _t.PromptInput.blocks([_as_content_block(c) for c in value])
+        return [_as_content_block(c) for c in value]
     if hasattr(value, "__iter__") and not isinstance(value, (bytes, str)):
-        return _t.PromptInput.blocks([_as_content_block(c) for c in value])
-    return value  # already a built PromptInput variant arm
+        return [_as_content_block(c) for c in value]
+    return value
 
 
 def _coerce_tool_choice(value: _ToolChoiceInput) -> Any:
     if value is None:
         return None
     if isinstance(value, str):
-        return _t.ToolChoice.named(value)
+        return _t.ToolChoice_Named(value)
     return value
 
 
@@ -1073,8 +906,8 @@ class Agent:
         tools: list[_ToolInput] | None = None,
         tool_choice: _ToolChoiceInput = None,
         structured_output_schema: str | None = None,
-    ) -> AsyncIterator[StreamEventBase]:
-        """Yield :class:`StreamEventBase` instances as the agent runs."""
+    ) -> AsyncIterator[_t.StreamEvent]:
+        """Yield :class:`StreamEvent` arms as the agent runs."""
         runtime = await self._ensure_runtime_async()
         args = self._build_invoke_args(prompt, tools, tool_choice, structured_output_schema)
         stream = await runtime.generate(args)
@@ -1108,7 +941,20 @@ class Agent:
         tool_choice: _ToolChoiceInput = None,
         structured_output_schema: str | None = None,
     ) -> AgentResult:
-        """Synchronous wrapper around :meth:`invoke_async`."""
+        """Synchronous wrapper around :meth:`invoke_async`.
+
+        Raises :class:`RuntimeError` if called from a running event loop. Use
+        :meth:`invoke_async` directly in Jupyter or async frameworks.
+        """
+        try:
+            asyncio.get_running_loop()
+        except RuntimeError:
+            pass
+        else:
+            raise RuntimeError(
+                "Agent.invoke() cannot run inside an existing event loop. "
+                "Use 'await agent.invoke_async(...)' instead."
+            )
         return asyncio.run(
             self.invoke_async(
                 prompt,
@@ -1155,19 +1001,19 @@ class _AgentResultAccumulator:
         self._last_message: _t.Message | None = None
         self._interrupts: list[_t.Interrupt] = []
 
-    def consume(self, event: StreamEventBase) -> None:
-        if isinstance(event, StreamEventMessageAdded):
+    def consume(self, event: _t.StreamEvent) -> None:
+        if isinstance(event, _t.StreamEvent_MessageAdded):
             self._last_message = event.value.message
-        elif isinstance(event, StreamEventModelMessage):
+        elif isinstance(event, _t.StreamEvent_ModelMessage):
             self._last_message = event.value.message
-        elif isinstance(event, StreamEventStop):
+        elif isinstance(event, _t.StreamEvent_Stop):
             self._stop = event.value
-        elif isinstance(event, StreamEventAgentResult):
+        elif isinstance(event, _t.StreamEvent_AgentResult):
             self._stop = event.value.stop
-        elif isinstance(event, StreamEventInterrupt):
+        elif isinstance(event, _t.StreamEvent_Interrupt):
             self._interrupts.append(event.value)
 
-    def finalize(self, agent: "Agent") -> "AgentResult":
+    def finalize(self, agent: Agent) -> AgentResult:
         stop = self._stop
         last = self._last_message
         if last is None:
@@ -1194,15 +1040,15 @@ class HookProvider(Protocol):
 
 
 class HookRegistry:
-    """Register callbacks keyed by :class:`StreamEventBase` subclass.
+    """Register callbacks keyed by ``StreamEvent`` arm class.
 
-    Subscribers match by exact class. Each arm of the wire ``stream-event``
-    variant is a distinct Python class; pick e.g. ``StreamEventTextDelta`` or
-    ``StreamEventStop``.
+    Each arm of the wire ``stream-event`` variant is a distinct Python class
+    (``StreamEvent_TextDelta``, ``StreamEvent_Stop``, ...). Subscribers match
+    by exact class.
 
-    Callbacks for events whose class name begins with ``After`` dispatch in
-    reverse registration order, mirroring teardown semantics. Everything
-    else dispatches FIFO.
+    Callbacks for arms whose name begins with ``After`` dispatch in reverse
+    registration order, mirroring teardown semantics. Everything else
+    dispatches FIFO.
     """
 
     def __init__(self) -> None:

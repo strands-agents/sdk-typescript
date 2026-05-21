@@ -11,14 +11,11 @@ from __future__ import annotations
 from typing import Any, Optional, Union
 
 from wasmtime.component import Variant as _WitVariant
+from wasmtime.component import VariantCase as _WitVariantCase
 
 
 def ok(value: Any = None) -> _WitVariant:
-    """Wrap ``value`` as the ``ok`` arm of a ``result<T, E>``.
-
-    Always tagged on the wire because both arms can carry payloads — pass the
-    bare ``value`` and this function lifts it into the right ``Variant``.
-    """
+    """Wrap ``value`` as the ``ok`` arm of a ``result<T, E>``."""
     return _WitVariant("ok", value)
 
 
@@ -74,27 +71,8 @@ class Pollable:
         return self._invoke('[method]pollable.block', (self._handle,))
 
 
-class StreamError:
-    """An error for input-stream and output-stream operations."""
-    # Untagged variant: each arm returns its bare payload (or ``None`` for unit arms).
-
-    @staticmethod
-    def last_operation_failed(value: Any) -> Any:
-        """The last operation (a write or flush) failed before completion.
-
-More information is available in the `error` payload.
-
-After this, the stream will be closed. All future operations return
-`stream-error::closed`."""
-        return value
-
-    @staticmethod
-    def closed() -> Any:
-        """The stream is closed: no more input will be accepted by the
-stream. A closed output-stream will return this error on all
-future operations."""
-        return None
-
+StreamError = Any | None
+"""An error for input-stream and output-stream operations."""
 
 class InputStream:
     """An input bytestream.
@@ -313,23 +291,32 @@ class ElicitResponse:
 
 class ElicitationError:
     """Why an elicitation call failed."""
-    # Tagged variant: each arm wraps in ``Variant(tag, payload)``.
+    pass
 
-    @staticmethod
-    def unknown_client(value: str) -> Any:
-        """No handler registered for the given `client-id`."""
-        return _WitVariant('unknown-client', value)
+class ElicitationError_UnknownClient(ElicitationError, _WitVariantCase):
+    """No handler registered for the given `client-id`."""
+    tag = 'unknown-client'
 
-    @staticmethod
-    def handler_failed(value: str) -> Any:
-        """Handler raised an exception."""
-        return _WitVariant('handler-failed', value)
+class ElicitationError_HandlerFailed(ElicitationError, _WitVariantCase):
+    """Handler raised an exception."""
+    tag = 'handler-failed'
 
-    @staticmethod
-    def timed_out() -> Any:
-        """Request timed out waiting for a human response."""
-        return _WitVariant('timed-out')
+class ElicitationError_TimedOut(ElicitationError, _WitVariantCase):
+    """Request timed out waiting for a human response."""
+    tag = 'timed-out'
 
+_ElicitationError_CASES: dict[str, type] = {
+    'unknown-client': ElicitationError_UnknownClient,
+    'handler-failed': ElicitationError_HandlerFailed,
+    'timed-out': ElicitationError_TimedOut,
+}
+
+def _ElicitationError_lift(raw: _WitVariant) -> ElicitationError:
+    cls = _ElicitationError_CASES.get(raw.tag)
+    if cls is None:
+        raise ValueError(f'unknown ElicitationError arm: {raw.tag!r}')
+    return cls(raw.payload)
+ElicitationError.lift = staticmethod(_ElicitationError_lift)  # type: ignore[attr-defined]
 
 class TextBlock:
     """Plain text."""
@@ -379,25 +366,8 @@ class S3Location:
         return id(self)
 
 
-class ImageSource:
-    """Source of image bytes."""
-    # Untagged variant: each arm returns its bare payload (or ``None`` for unit arms).
-
-    @staticmethod
-    def bytes(value: bytes) -> Any:
-        """Raw image bytes."""
-        return value
-
-    @staticmethod
-    def url(value: str) -> Any:
-        """Publicly-accessible URL."""
-        return value
-
-    @staticmethod
-    def s3(value: S3Location) -> Any:
-        """Object in S3."""
-        return value
-
+ImageSource = bytes | str | S3Location
+"""Source of image bytes."""
 
 class ImageBlock:
     """Image attached to a message."""
@@ -422,20 +392,8 @@ class ImageBlock:
         return id(self)
 
 
-class VideoSource:
-    """Source of video bytes."""
-    # Untagged variant: each arm returns its bare payload (or ``None`` for unit arms).
-
-    @staticmethod
-    def bytes(value: bytes) -> Any:
-        """Raw video bytes."""
-        return value
-
-    @staticmethod
-    def s3(value: S3Location) -> Any:
-        """Object in S3."""
-        return value
-
+VideoSource = bytes | S3Location
+"""Source of video bytes."""
 
 class VideoBlock:
     """Video attached to a message."""
@@ -460,30 +418,8 @@ class VideoBlock:
         return id(self)
 
 
-class DocumentSource:
-    """Source of document bytes."""
-    # Untagged variant: each arm returns its bare payload (or ``None`` for unit arms).
-
-    @staticmethod
-    def bytes(value: bytes) -> Any:
-        """Raw document bytes."""
-        return value
-
-    @staticmethod
-    def text(value: str) -> Any:
-        """Plain text content."""
-        return value
-
-    @staticmethod
-    def content(value: list[TextBlock]) -> Any:
-        """Structured content made of text blocks."""
-        return value
-
-    @staticmethod
-    def s3(value: S3Location) -> Any:
-        """Object in S3."""
-        return value
-
+DocumentSource = bytes | str | list[TextBlock] | S3Location
+"""Source of document bytes."""
 
 class DocumentCitationsConfig:
     """Citation configuration attached to a document."""
@@ -657,18 +593,27 @@ class GuardContentImage:
 
 class GuardContentBlock:
     """Content submitted to a guardrail for evaluation."""
-    # Tagged variant: each arm wraps in ``Variant(tag, payload)``.
+    pass
 
-    @staticmethod
-    def text(value: GuardContentText) -> Any:
-        """Text guard content."""
-        return _WitVariant('text', value)
+class GuardContentBlock_Text(GuardContentBlock, _WitVariantCase):
+    """Text guard content."""
+    tag = 'text'
 
-    @staticmethod
-    def image(value: GuardContentImage) -> Any:
-        """Image guard content."""
-        return _WitVariant('image', value)
+class GuardContentBlock_Image(GuardContentBlock, _WitVariantCase):
+    """Image guard content."""
+    tag = 'image'
 
+_GuardContentBlock_CASES: dict[str, type] = {
+    'text': GuardContentBlock_Text,
+    'image': GuardContentBlock_Image,
+}
+
+def _GuardContentBlock_lift(raw: _WitVariant) -> GuardContentBlock:
+    cls = _GuardContentBlock_CASES.get(raw.tag)
+    if cls is None:
+        raise ValueError(f'unknown GuardContentBlock arm: {raw.tag!r}')
+    return cls(raw.payload)
+GuardContentBlock.lift = staticmethod(_GuardContentBlock_lift)  # type: ignore[attr-defined]
 
 class DocumentRange:
     """Range within a source document (characters, pages, or chunks)."""
@@ -753,33 +698,42 @@ class WebLocation:
 
 class CitationLocation:
     """Anchor a citation points to."""
-    # Tagged variant: each arm wraps in ``Variant(tag, payload)``.
+    pass
 
-    @staticmethod
-    def document_char(value: DocumentRange) -> Any:
-        """Character range within a document."""
-        return _WitVariant('document-char', value)
+class CitationLocation_DocumentChar(CitationLocation, _WitVariantCase):
+    """Character range within a document."""
+    tag = 'document-char'
 
-    @staticmethod
-    def document_page(value: DocumentRange) -> Any:
-        """Page range within a document."""
-        return _WitVariant('document-page', value)
+class CitationLocation_DocumentPage(CitationLocation, _WitVariantCase):
+    """Page range within a document."""
+    tag = 'document-page'
 
-    @staticmethod
-    def document_chunk(value: DocumentRange) -> Any:
-        """Chunk range within a document."""
-        return _WitVariant('document-chunk', value)
+class CitationLocation_DocumentChunk(CitationLocation, _WitVariantCase):
+    """Chunk range within a document."""
+    tag = 'document-chunk'
 
-    @staticmethod
-    def search_result(value: SearchResultRange) -> Any:
-        """Range within a search result."""
-        return _WitVariant('search-result', value)
+class CitationLocation_SearchResult(CitationLocation, _WitVariantCase):
+    """Range within a search result."""
+    tag = 'search-result'
 
-    @staticmethod
-    def web(value: WebLocation) -> Any:
-        """Web page."""
-        return _WitVariant('web', value)
+class CitationLocation_Web(CitationLocation, _WitVariantCase):
+    """Web page."""
+    tag = 'web'
 
+_CitationLocation_CASES: dict[str, type] = {
+    'document-char': CitationLocation_DocumentChar,
+    'document-page': CitationLocation_DocumentPage,
+    'document-chunk': CitationLocation_DocumentChunk,
+    'search-result': CitationLocation_SearchResult,
+    'web': CitationLocation_Web,
+}
+
+def _CitationLocation_lift(raw: _WitVariant) -> CitationLocation:
+    cls = _CitationLocation_CASES.get(raw.tag)
+    if cls is None:
+        raise ValueError(f'unknown CitationLocation arm: {raw.tag!r}')
+    return cls(raw.payload)
+CitationLocation.lift = staticmethod(_CitationLocation_lift)  # type: ignore[attr-defined]
 
 class CitationText:
     """Text fragment from a source or a generated answer."""
@@ -892,10 +846,7 @@ class ToolUseBlock:
 
 
 class ToolResultStatus(str):
-    """Whether a tool invocation succeeded. Richer failure classification
-(cancelled, timed-out, invalid-input) lives on `tools.tool-error`
-and is carried on `lifecycle-event::after-tool-call.error` or on a
-failed `tool-stream-event::error`."""
+    """Whether a tool invocation succeeded. Richer classification lives on `tools.tool-error`."""
     __slots__ = ()
 
     SUCCESS: 'ToolResultStatus'
@@ -928,36 +879,43 @@ outputs that carry schema-validated data, not prose."""
 
 
 class ToolResultContent:
-    """A block that can appear inside a `tool-result-block.content` array.
-Narrower than `content-block` since nested tool calls and citations
-are not valid tool output."""
-    # Tagged variant: each arm wraps in ``Variant(tag, payload)``.
+    """Block valid inside `tool-result-block.content`. Narrower than `content-block`."""
+    pass
 
-    @staticmethod
-    def text(value: TextBlock) -> Any:
-        """Text output."""
-        return _WitVariant('text', value)
+class ToolResultContent_Text(ToolResultContent, _WitVariantCase):
+    """Text output."""
+    tag = 'text'
 
-    @staticmethod
-    def json(value: JsonBlock) -> Any:
-        """Structured JSON output."""
-        return _WitVariant('json', value)
+class ToolResultContent_Json(ToolResultContent, _WitVariantCase):
+    """Structured JSON output."""
+    tag = 'json'
 
-    @staticmethod
-    def image(value: ImageBlock) -> Any:
-        """Image output."""
-        return _WitVariant('image', value)
+class ToolResultContent_Image(ToolResultContent, _WitVariantCase):
+    """Image output."""
+    tag = 'image'
 
-    @staticmethod
-    def video(value: VideoBlock) -> Any:
-        """Video output."""
-        return _WitVariant('video', value)
+class ToolResultContent_Video(ToolResultContent, _WitVariantCase):
+    """Video output."""
+    tag = 'video'
 
-    @staticmethod
-    def document(value: DocumentBlock) -> Any:
-        """Document output."""
-        return _WitVariant('document', value)
+class ToolResultContent_Document(ToolResultContent, _WitVariantCase):
+    """Document output."""
+    tag = 'document'
 
+_ToolResultContent_CASES: dict[str, type] = {
+    'text': ToolResultContent_Text,
+    'json': ToolResultContent_Json,
+    'image': ToolResultContent_Image,
+    'video': ToolResultContent_Video,
+    'document': ToolResultContent_Document,
+}
+
+def _ToolResultContent_lift(raw: _WitVariant) -> ToolResultContent:
+    cls = _ToolResultContent_CASES.get(raw.tag)
+    if cls is None:
+        raise ValueError(f'unknown ToolResultContent arm: {raw.tag!r}')
+    return cls(raw.payload)
+ToolResultContent.lift = staticmethod(_ToolResultContent_lift)  # type: ignore[attr-defined]
 
 class ToolResultBlock:
     """Outcome of a tool execution."""
@@ -1018,68 +976,77 @@ next invocation to resume the paused agent."""
 
 class ContentBlock:
     """Any block that can appear inside a message."""
-    # Tagged variant: each arm wraps in ``Variant(tag, payload)``.
+    pass
 
-    @staticmethod
-    def text(value: TextBlock) -> Any:
-        """Plain text."""
-        return _WitVariant('text', value)
+class ContentBlock_Text(ContentBlock, _WitVariantCase):
+    """Plain text."""
+    tag = 'text'
 
-    @staticmethod
-    def json(value: JsonBlock) -> Any:
-        """Structured JSON payload."""
-        return _WitVariant('json', value)
+class ContentBlock_Json(ContentBlock, _WitVariantCase):
+    """Structured JSON payload."""
+    tag = 'json'
 
-    @staticmethod
-    def tool_use(value: ToolUseBlock) -> Any:
-        """Model requested a tool call."""
-        return _WitVariant('tool-use', value)
+class ContentBlock_ToolUse(ContentBlock, _WitVariantCase):
+    """Model requested a tool call."""
+    tag = 'tool-use'
 
-    @staticmethod
-    def tool_result(value: ToolResultBlock) -> Any:
-        """Tool call completed."""
-        return _WitVariant('tool-result', value)
+class ContentBlock_ToolResult(ContentBlock, _WitVariantCase):
+    """Tool call completed."""
+    tag = 'tool-result'
 
-    @staticmethod
-    def reasoning(value: ReasoningBlock) -> Any:
-        """Model reasoning."""
-        return _WitVariant('reasoning', value)
+class ContentBlock_Reasoning(ContentBlock, _WitVariantCase):
+    """Model reasoning."""
+    tag = 'reasoning'
 
-    @staticmethod
-    def cache_point(value: CachePointBlock) -> Any:
-        """Caching boundary marker."""
-        return _WitVariant('cache-point', value)
+class ContentBlock_CachePoint(ContentBlock, _WitVariantCase):
+    """Caching boundary marker."""
+    tag = 'cache-point'
 
-    @staticmethod
-    def guard_content(value: GuardContentBlock) -> Any:
-        """Content submitted for guardrail evaluation."""
-        return _WitVariant('guard-content', value)
+class ContentBlock_GuardContent(ContentBlock, _WitVariantCase):
+    """Content submitted for guardrail evaluation."""
+    tag = 'guard-content'
 
-    @staticmethod
-    def image(value: ImageBlock) -> Any:
-        """Image."""
-        return _WitVariant('image', value)
+class ContentBlock_Image(ContentBlock, _WitVariantCase):
+    """Image."""
+    tag = 'image'
 
-    @staticmethod
-    def video(value: VideoBlock) -> Any:
-        """Video."""
-        return _WitVariant('video', value)
+class ContentBlock_Video(ContentBlock, _WitVariantCase):
+    """Video."""
+    tag = 'video'
 
-    @staticmethod
-    def document(value: DocumentBlock) -> Any:
-        """Document."""
-        return _WitVariant('document', value)
+class ContentBlock_Document(ContentBlock, _WitVariantCase):
+    """Document."""
+    tag = 'document'
 
-    @staticmethod
-    def citations(value: CitationsBlock) -> Any:
-        """Citations emitted by the model."""
-        return _WitVariant('citations', value)
+class ContentBlock_Citations(ContentBlock, _WitVariantCase):
+    """Citations emitted by the model."""
+    tag = 'citations'
 
-    @staticmethod
-    def interrupt_response(value: InterruptResponseBlock) -> Any:
-        """Response to a prior interrupt, supplied when resuming."""
-        return _WitVariant('interrupt-response', value)
+class ContentBlock_InterruptResponse(ContentBlock, _WitVariantCase):
+    """Response to a prior interrupt, supplied when resuming."""
+    tag = 'interrupt-response'
 
+_ContentBlock_CASES: dict[str, type] = {
+    'text': ContentBlock_Text,
+    'json': ContentBlock_Json,
+    'tool-use': ContentBlock_ToolUse,
+    'tool-result': ContentBlock_ToolResult,
+    'reasoning': ContentBlock_Reasoning,
+    'cache-point': ContentBlock_CachePoint,
+    'guard-content': ContentBlock_GuardContent,
+    'image': ContentBlock_Image,
+    'video': ContentBlock_Video,
+    'document': ContentBlock_Document,
+    'citations': ContentBlock_Citations,
+    'interrupt-response': ContentBlock_InterruptResponse,
+}
+
+def _ContentBlock_lift(raw: _WitVariant) -> ContentBlock:
+    cls = _ContentBlock_CASES.get(raw.tag)
+    if cls is None:
+        raise ValueError(f'unknown ContentBlock arm: {raw.tag!r}')
+    return cls(raw.payload)
+ContentBlock.lift = staticmethod(_ContentBlock_lift)  # type: ignore[attr-defined]
 
 class Role(str):
     """Who a message is from."""
@@ -1217,21 +1184,9 @@ class Message:
         return id(self)
 
 
-class PromptInput:
-    """A prompt-style input: either prose or structured content. Used for
+PromptInput = str | list[ContentBlock]
+"""A prompt-style input: either prose or structured content. Used for
 both system prompts and user input."""
-    # Untagged variant: each arm returns its bare payload (or ``None`` for unit arms).
-
-    @staticmethod
-    def text(value: str) -> Any:
-        """Plain text prompt."""
-        return value
-
-    @staticmethod
-    def blocks(value: list[ContentBlock]) -> Any:
-        """Structured content blocks."""
-        return value
-
 
 class AnthropicConfig:
     """Anthropic API model configuration."""
@@ -1436,34 +1391,43 @@ class CustomModelConfig:
 
 class ModelConfig:
     """Which model provider the agent should use."""
-    # Tagged variant: each arm wraps in ``Variant(tag, payload)``.
+    pass
 
-    @staticmethod
-    def anthropic(value: AnthropicConfig) -> Any:
-        """Anthropic API."""
-        return _WitVariant('anthropic', value)
+class ModelConfig_Anthropic(ModelConfig, _WitVariantCase):
+    """Anthropic API."""
+    tag = 'anthropic'
 
-    @staticmethod
-    def bedrock(value: BedrockConfig) -> Any:
-        """AWS Bedrock."""
-        return _WitVariant('bedrock', value)
+class ModelConfig_Bedrock(ModelConfig, _WitVariantCase):
+    """AWS Bedrock."""
+    tag = 'bedrock'
 
-    @staticmethod
-    def openai(value: OpenaiConfig) -> Any:
-        """OpenAI API."""
-        return _WitVariant('openai', value)
+class ModelConfig_Openai(ModelConfig, _WitVariantCase):
+    """OpenAI API."""
+    tag = 'openai'
 
-    @staticmethod
-    def gemini(value: GeminiConfig) -> Any:
-        """Google Gemini API."""
-        return _WitVariant('gemini', value)
+class ModelConfig_Gemini(ModelConfig, _WitVariantCase):
+    """Google Gemini API."""
+    tag = 'gemini'
 
-    @staticmethod
-    def custom(value: CustomModelConfig) -> Any:
-        """Custom provider supplied by your application. Implement the
+class ModelConfig_Custom(ModelConfig, _WitVariantCase):
+    """Custom provider supplied by your application. Implement the
 `model-provider` interface to serve it."""
-        return _WitVariant('custom', value)
+    tag = 'custom'
 
+_ModelConfig_CASES: dict[str, type] = {
+    'anthropic': ModelConfig_Anthropic,
+    'bedrock': ModelConfig_Bedrock,
+    'openai': ModelConfig_Openai,
+    'gemini': ModelConfig_Gemini,
+    'custom': ModelConfig_Custom,
+}
+
+def _ModelConfig_lift(raw: _WitVariant) -> ModelConfig:
+    cls = _ModelConfig_CASES.get(raw.tag)
+    if cls is None:
+        raise ValueError(f'unknown ModelConfig arm: {raw.tag!r}')
+    return cls(raw.payload)
+ModelConfig.lift = staticmethod(_ModelConfig_lift)  # type: ignore[attr-defined]
 
 class ModelParams:
     """Sampling parameters applied to every call on the chosen provider."""
@@ -1501,53 +1465,62 @@ class ModelParams:
 class ModelError:
     """Why a model call failed. Retry logic keys off of which arm fires, so
 implementations should pick the narrowest one that fits."""
-    # Tagged variant: each arm wraps in ``Variant(tag, payload)``.
+    pass
 
-    @staticmethod
-    def unknown_provider(value: str) -> Any:
-        """No provider registered for the given `provider-id`."""
-        return _WitVariant('unknown-provider', value)
+class ModelError_UnknownProvider(ModelError, _WitVariantCase):
+    """No provider registered for the given `provider-id`."""
+    tag = 'unknown-provider'
 
-    @staticmethod
-    def invalid_request(value: str) -> Any:
-        """Provider refused the request due to malformed input."""
-        return _WitVariant('invalid-request', value)
+class ModelError_InvalidRequest(ModelError, _WitVariantCase):
+    """Provider refused the request due to malformed input."""
+    tag = 'invalid-request'
 
-    @staticmethod
-    def unauthorized(value: str) -> Any:
-        """Caller lacks permission (missing or expired credentials)."""
-        return _WitVariant('unauthorized', value)
+class ModelError_Unauthorized(ModelError, _WitVariantCase):
+    """Caller lacks permission (missing or expired credentials)."""
+    tag = 'unauthorized'
 
-    @staticmethod
-    def throttled(value: str) -> Any:
-        """Provider returned a rate-limit error. Retry after a backoff."""
-        return _WitVariant('throttled', value)
+class ModelError_Throttled(ModelError, _WitVariantCase):
+    """Provider returned a rate-limit error. Retry after a backoff."""
+    tag = 'throttled'
 
-    @staticmethod
-    def server_error(value: str) -> Any:
-        """Provider returned a server-side error. Retry may succeed."""
-        return _WitVariant('server-error', value)
+class ModelError_ServerError(ModelError, _WitVariantCase):
+    """Provider returned a server-side error. Retry may succeed."""
+    tag = 'server-error'
 
-    @staticmethod
-    def context_window_exceeded() -> Any:
-        """Request exceeded the model's context window."""
-        return _WitVariant('context-window-exceeded')
+class ModelError_ContextWindowExceeded(ModelError, _WitVariantCase):
+    """Request exceeded the model's context window."""
+    tag = 'context-window-exceeded'
 
-    @staticmethod
-    def content_filtered(value: str) -> Any:
-        """Content was rejected by provider safety policy."""
-        return _WitVariant('content-filtered', value)
+class ModelError_ContentFiltered(ModelError, _WitVariantCase):
+    """Content was rejected by provider safety policy."""
+    tag = 'content-filtered'
 
-    @staticmethod
-    def transient(value: str) -> Any:
-        """Transient network or transport failure. Retry may succeed."""
-        return _WitVariant('transient', value)
+class ModelError_Transient(ModelError, _WitVariantCase):
+    """Transient network or transport failure. Retry may succeed."""
+    tag = 'transient'
 
-    @staticmethod
-    def internal(value: str) -> Any:
-        """Catch-all for internal failures."""
-        return _WitVariant('internal', value)
+class ModelError_Internal(ModelError, _WitVariantCase):
+    """Catch-all for internal failures."""
+    tag = 'internal'
 
+_ModelError_CASES: dict[str, type] = {
+    'unknown-provider': ModelError_UnknownProvider,
+    'invalid-request': ModelError_InvalidRequest,
+    'unauthorized': ModelError_Unauthorized,
+    'throttled': ModelError_Throttled,
+    'server-error': ModelError_ServerError,
+    'context-window-exceeded': ModelError_ContextWindowExceeded,
+    'content-filtered': ModelError_ContentFiltered,
+    'transient': ModelError_Transient,
+    'internal': ModelError_Internal,
+}
+
+def _ModelError_lift(raw: _WitVariant) -> ModelError:
+    cls = _ModelError_CASES.get(raw.tag)
+    if cls is None:
+        raise ValueError(f'unknown ModelError arm: {raw.tag!r}')
+    return cls(raw.payload)
+ModelError.lift = staticmethod(_ModelError_lift)  # type: ignore[attr-defined]
 
 class SlidingWindowConfig:
     """Sliding-window strategy: trim oldest messages once the conversation
@@ -1627,24 +1600,33 @@ messages into a single summary message and keep the rest verbatim."""
 
 class ConversationManagerConfig:
     """Which conversation manager the agent uses."""
-    # Tagged variant: each arm wraps in ``Variant(tag, payload)``.
+    pass
 
-    @staticmethod
-    def none() -> Any:
-        """No conversation management. History grows without bound and
+class ConversationManagerConfig_None(ConversationManagerConfig, _WitVariantCase):
+    """No conversation management. History grows without bound and
 context-overflow errors propagate to the caller."""
-        return _WitVariant('none')
+    tag = 'none'
 
-    @staticmethod
-    def sliding_window(value: SlidingWindowConfig) -> Any:
-        """Sliding-window trimming."""
-        return _WitVariant('sliding-window', value)
+class ConversationManagerConfig_SlidingWindow(ConversationManagerConfig, _WitVariantCase):
+    """Sliding-window trimming."""
+    tag = 'sliding-window'
 
-    @staticmethod
-    def summarizing(value: SummarizingConfig) -> Any:
-        """Summarization of older messages."""
-        return _WitVariant('summarizing', value)
+class ConversationManagerConfig_Summarizing(ConversationManagerConfig, _WitVariantCase):
+    """Summarization of older messages."""
+    tag = 'summarizing'
 
+_ConversationManagerConfig_CASES: dict[str, type] = {
+    'none': ConversationManagerConfig_None,
+    'sliding-window': ConversationManagerConfig_SlidingWindow,
+    'summarizing': ConversationManagerConfig_Summarizing,
+}
+
+def _ConversationManagerConfig_lift(raw: _WitVariant) -> ConversationManagerConfig:
+    cls = _ConversationManagerConfig_CASES.get(raw.tag)
+    if cls is None:
+        raise ValueError(f'unknown ConversationManagerConfig arm: {raw.tag!r}')
+    return cls(raw.payload)
+ConversationManagerConfig.lift = staticmethod(_ConversationManagerConfig_lift)  # type: ignore[attr-defined]
 
 class JitterKind(str):
     """How much random variation to apply to computed delays."""
@@ -1736,29 +1718,35 @@ class ExponentialBackoffConfig:
 
 class BackoffStrategy:
     """Backoff curve applied between attempts."""
-    # Tagged variant: each arm wraps in ``Variant(tag, payload)``.
+    pass
 
-    @staticmethod
-    def constant(value: ConstantBackoffConfig) -> Any:
-        """Fixed delay."""
-        return _WitVariant('constant', value)
+class BackoffStrategy_Constant(BackoffStrategy, _WitVariantCase):
+    """Fixed delay."""
+    tag = 'constant'
 
-    @staticmethod
-    def linear(value: LinearBackoffConfig) -> Any:
-        """Linear growth."""
-        return _WitVariant('linear', value)
+class BackoffStrategy_Linear(BackoffStrategy, _WitVariantCase):
+    """Linear growth."""
+    tag = 'linear'
 
-    @staticmethod
-    def exponential(value: ExponentialBackoffConfig) -> Any:
-        """Exponential growth."""
-        return _WitVariant('exponential', value)
+class BackoffStrategy_Exponential(BackoffStrategy, _WitVariantCase):
+    """Exponential growth."""
+    tag = 'exponential'
 
+_BackoffStrategy_CASES: dict[str, type] = {
+    'constant': BackoffStrategy_Constant,
+    'linear': BackoffStrategy_Linear,
+    'exponential': BackoffStrategy_Exponential,
+}
+
+def _BackoffStrategy_lift(raw: _WitVariant) -> BackoffStrategy:
+    cls = _BackoffStrategy_CASES.get(raw.tag)
+    if cls is None:
+        raise ValueError(f'unknown BackoffStrategy arm: {raw.tag!r}')
+    return cls(raw.payload)
+BackoffStrategy.lift = staticmethod(_BackoffStrategy_lift)  # type: ignore[attr-defined]
 
 class ModelRetryStrategy:
-    """A single retry strategy for model calls.
-
-Defaults approximate the TS `DefaultModelRetryStrategy`: exponential
-backoff with full jitter, capped at 6 attempts."""
+    """A single retry strategy. Default is exponential backoff, full jitter, 6 attempts."""
     def __init__(
         self,
         *,
@@ -1792,16 +1780,10 @@ backoff with full jitter, capped at 6 attempts."""
 
 class RetryConfig:
     """Retry configuration attached to an agent.
-
-Strategies compose: every strategy observes every failure, and a
-retry is attempted if any strategy requests one. The first strategy
-to request a delay wins. Registration order does not affect
-correctness. Supplying two strategies with the same `backoff` arm
-is almost certainly a mistake and may surface as
-`agent-error::invalid-input`.
-
-An empty list disables retries; omitting the config from
-`agent-config.retry` applies a default single `exponential` strategy."""
+Every strategy observes every failure; the first to request a delay wins.
+Empty list disables retries; omitting `agent-config.retry` applies a default
+single exponential strategy. Two strategies with the same `backoff` arm
+surface as `agent-error::invalid-input`."""
     def __init__(
         self,
         *,
@@ -1898,46 +1880,64 @@ class CustomStorageConfig:
 
 class StorageConfig:
     """Where to persist session snapshots."""
-    # Tagged variant: each arm wraps in ``Variant(tag, payload)``.
+    pass
 
-    @staticmethod
-    def file(value: FileStorageConfig) -> Any:
-        """Local filesystem."""
-        return _WitVariant('file', value)
+class StorageConfig_File(StorageConfig, _WitVariantCase):
+    """Local filesystem."""
+    tag = 'file'
 
-    @staticmethod
-    def s3(value: S3StorageConfig) -> Any:
-        """Amazon S3."""
-        return _WitVariant('s3', value)
+class StorageConfig_S3(StorageConfig, _WitVariantCase):
+    """Amazon S3."""
+    tag = 's3'
 
-    @staticmethod
-    def custom(value: CustomStorageConfig) -> Any:
-        """Application-implemented backend."""
-        return _WitVariant('custom', value)
+class StorageConfig_Custom(StorageConfig, _WitVariantCase):
+    """Application-implemented backend."""
+    tag = 'custom'
 
+_StorageConfig_CASES: dict[str, type] = {
+    'file': StorageConfig_File,
+    's3': StorageConfig_S3,
+    'custom': StorageConfig_Custom,
+}
+
+def _StorageConfig_lift(raw: _WitVariant) -> StorageConfig:
+    cls = _StorageConfig_CASES.get(raw.tag)
+    if cls is None:
+        raise ValueError(f'unknown StorageConfig arm: {raw.tag!r}')
+    return cls(raw.payload)
+StorageConfig.lift = staticmethod(_StorageConfig_lift)  # type: ignore[attr-defined]
 
 class SaveLatestPolicy:
     """When to update the "latest" snapshot pointer. The `trigger` arm
 carries the id of an application-supplied callback that decides
 per-invocation."""
-    # Tagged variant: each arm wraps in ``Variant(tag, payload)``.
+    pass
 
-    @staticmethod
-    def message() -> Any:
-        """After every message added to the conversation."""
-        return _WitVariant('message')
+class SaveLatestPolicy_Message(SaveLatestPolicy, _WitVariantCase):
+    """After every message added to the conversation."""
+    tag = 'message'
 
-    @staticmethod
-    def invocation() -> Any:
-        """Once per invocation, after it completes."""
-        return _WitVariant('invocation')
+class SaveLatestPolicy_Invocation(SaveLatestPolicy, _WitVariantCase):
+    """Once per invocation, after it completes."""
+    tag = 'invocation'
 
-    @staticmethod
-    def trigger(value: str) -> Any:
-        """Each invocation consults the named `snapshot-trigger-handler`.
+class SaveLatestPolicy_Trigger(SaveLatestPolicy, _WitVariantCase):
+    """Each invocation consults the named `snapshot-trigger-handler`.
 The id identifies which handler to invoke."""
-        return _WitVariant('trigger', value)
+    tag = 'trigger'
 
+_SaveLatestPolicy_CASES: dict[str, type] = {
+    'message': SaveLatestPolicy_Message,
+    'invocation': SaveLatestPolicy_Invocation,
+    'trigger': SaveLatestPolicy_Trigger,
+}
+
+def _SaveLatestPolicy_lift(raw: _WitVariant) -> SaveLatestPolicy:
+    cls = _SaveLatestPolicy_CASES.get(raw.tag)
+    if cls is None:
+        raise ValueError(f'unknown SaveLatestPolicy arm: {raw.tag!r}')
+    return cls(raw.payload)
+SaveLatestPolicy.lift = staticmethod(_SaveLatestPolicy_lift)  # type: ignore[attr-defined]
 
 class SessionConfig:
     """Session persistence configuration attached to an agent."""
@@ -2075,23 +2075,32 @@ class SummarizingState:
 class ConversationManagerState:
     """Conversation manager snapshot state. Which arm is populated depends
 on the conversation manager the agent was built with."""
-    # Tagged variant: each arm wraps in ``Variant(tag, payload)``.
+    pass
 
-    @staticmethod
-    def none() -> Any:
-        """No conversation manager or null manager; nothing to persist."""
-        return _WitVariant('none')
+class ConversationManagerState_None(ConversationManagerState, _WitVariantCase):
+    """No conversation manager or null manager; nothing to persist."""
+    tag = 'none'
 
-    @staticmethod
-    def sliding_window(value: SlidingWindowState) -> Any:
-        """Sliding-window manager state."""
-        return _WitVariant('sliding-window', value)
+class ConversationManagerState_SlidingWindow(ConversationManagerState, _WitVariantCase):
+    """Sliding-window manager state."""
+    tag = 'sliding-window'
 
-    @staticmethod
-    def summarizing(value: SummarizingState) -> Any:
-        """Summarizing manager state."""
-        return _WitVariant('summarizing', value)
+class ConversationManagerState_Summarizing(ConversationManagerState, _WitVariantCase):
+    """Summarizing manager state."""
+    tag = 'summarizing'
 
+_ConversationManagerState_CASES: dict[str, type] = {
+    'none': ConversationManagerState_None,
+    'sliding-window': ConversationManagerState_SlidingWindow,
+    'summarizing': ConversationManagerState_Summarizing,
+}
+
+def _ConversationManagerState_lift(raw: _WitVariant) -> ConversationManagerState:
+    cls = _ConversationManagerState_CASES.get(raw.tag)
+    if cls is None:
+        raise ValueError(f'unknown ConversationManagerState arm: {raw.tag!r}')
+    return cls(raw.payload)
+ConversationManagerState.lift = staticmethod(_ConversationManagerState_lift)  # type: ignore[attr-defined]
 
 class RetryStrategyState:
     """Retry-strategy state at snapshot time."""
@@ -2125,10 +2134,7 @@ class RetryStrategyState:
 
 
 class PluginStateEntry:
-    """Named piece of plugin state. Plugins identify themselves by
-`plugin-name`; `data` is an opaque JSON object specific to that
-plugin. Used for user-authored plugins and for vended plugins whose
-state isn't modeled explicitly elsewhere."""
+    """Named plugin state. `data` is an opaque JSON object owned by the plugin."""
     def __init__(
         self,
         *,
@@ -2270,48 +2276,57 @@ class SnapshotManifest:
 
 class StorageError:
     """Why a snapshot operation failed."""
-    # Tagged variant: each arm wraps in ``Variant(tag, payload)``.
+    pass
 
-    @staticmethod
-    def not_found() -> Any:
-        """No snapshot or manifest at the requested location."""
-        return _WitVariant('not-found')
+class StorageError_NotFound(StorageError, _WitVariantCase):
+    """No snapshot or manifest at the requested location."""
+    tag = 'not-found'
 
-    @staticmethod
-    def access_denied(value: str) -> Any:
-        """Caller lacks permission to read or write the storage."""
-        return _WitVariant('access-denied', value)
+class StorageError_AccessDenied(StorageError, _WitVariantCase):
+    """Caller lacks permission to read or write the storage."""
+    tag = 'access-denied'
 
-    @staticmethod
-    def out_of_space() -> Any:
-        """Backing storage is full or over quota."""
-        return _WitVariant('out-of-space')
+class StorageError_OutOfSpace(StorageError, _WitVariantCase):
+    """Backing storage is full or over quota."""
+    tag = 'out-of-space'
 
-    @staticmethod
-    def corrupt(value: str) -> Any:
-        """Snapshot is malformed or cannot be deserialized."""
-        return _WitVariant('corrupt', value)
+class StorageError_Corrupt(StorageError, _WitVariantCase):
+    """Snapshot is malformed or cannot be deserialized."""
+    tag = 'corrupt'
 
-    @staticmethod
-    def conflict(value: str) -> Any:
-        """Concurrent writers collided; retrying may succeed."""
-        return _WitVariant('conflict', value)
+class StorageError_Conflict(StorageError, _WitVariantCase):
+    """Concurrent writers collided; retrying may succeed."""
+    tag = 'conflict'
 
-    @staticmethod
-    def transient(value: str) -> Any:
-        """Transient I/O failure; retrying may succeed."""
-        return _WitVariant('transient', value)
+class StorageError_Transient(StorageError, _WitVariantCase):
+    """Transient I/O failure; retrying may succeed."""
+    tag = 'transient'
 
-    @staticmethod
-    def permanent(value: str) -> Any:
-        """Permanent backend failure."""
-        return _WitVariant('permanent', value)
+class StorageError_Permanent(StorageError, _WitVariantCase):
+    """Permanent backend failure."""
+    tag = 'permanent'
 
-    @staticmethod
-    def unknown_backend(value: str) -> Any:
-        """No custom backend registered for the given backend-id."""
-        return _WitVariant('unknown-backend', value)
+class StorageError_UnknownBackend(StorageError, _WitVariantCase):
+    """No custom backend registered for the given backend-id."""
+    tag = 'unknown-backend'
 
+_StorageError_CASES: dict[str, type] = {
+    'not-found': StorageError_NotFound,
+    'access-denied': StorageError_AccessDenied,
+    'out-of-space': StorageError_OutOfSpace,
+    'corrupt': StorageError_Corrupt,
+    'conflict': StorageError_Conflict,
+    'transient': StorageError_Transient,
+    'permanent': StorageError_Permanent,
+    'unknown-backend': StorageError_UnknownBackend,
+}
+
+def _StorageError_lift(raw: _WitVariant) -> StorageError:
+    cls = _StorageError_CASES.get(raw.tag)
+    if cls is None:
+        raise ValueError(f'unknown StorageError arm: {raw.tag!r}')
+    return cls(raw.payload)
+StorageError.lift = staticmethod(_StorageError_lift)  # type: ignore[attr-defined]
 
 class SaveSnapshotArgs:
     """Arguments for `save-snapshot`."""
@@ -2548,18 +2563,27 @@ class TriggerParams:
 
 class TriggerError:
     """Why a trigger evaluation failed."""
-    # Tagged variant: each arm wraps in ``Variant(tag, payload)``.
+    pass
 
-    @staticmethod
-    def unknown(value: str) -> Any:
-        """No trigger registered for the given id."""
-        return _WitVariant('unknown', value)
+class TriggerError_Unknown(TriggerError, _WitVariantCase):
+    """No trigger registered for the given id."""
+    tag = 'unknown'
 
-    @staticmethod
-    def failed(value: str) -> Any:
-        """Trigger raised an exception."""
-        return _WitVariant('failed', value)
+class TriggerError_Failed(TriggerError, _WitVariantCase):
+    """Trigger raised an exception."""
+    tag = 'failed'
 
+_TriggerError_CASES: dict[str, type] = {
+    'unknown': TriggerError_Unknown,
+    'failed': TriggerError_Failed,
+}
+
+def _TriggerError_lift(raw: _WitVariant) -> TriggerError:
+    cls = _TriggerError_CASES.get(raw.tag)
+    if cls is None:
+        raise ValueError(f'unknown TriggerError arm: {raw.tag!r}')
+    return cls(raw.payload)
+TriggerError.lift = staticmethod(_TriggerError_lift)  # type: ignore[attr-defined]
 
 class ToolSpec:
     """Declaration of a tool the model can call."""
@@ -2658,27 +2682,36 @@ class CallToolArgs:
 class ToolChoice:
     """Policy controlling whether and how the model calls tools on the next
 generation step."""
-    # Tagged variant: each arm wraps in ``Variant(tag, payload)``.
+    pass
 
-    @staticmethod
-    def auto() -> Any:
-        """Model decides whether to call a tool."""
-        return _WitVariant('auto')
+class ToolChoice_Auto(ToolChoice, _WitVariantCase):
+    """Model decides whether to call a tool."""
+    tag = 'auto'
 
-    @staticmethod
-    def any() -> Any:
-        """Model must call at least one tool."""
-        return _WitVariant('any')
+class ToolChoice_Any(ToolChoice, _WitVariantCase):
+    """Model must call at least one tool."""
+    tag = 'any'
 
-    @staticmethod
-    def named(value: str) -> Any:
-        """Model must call the tool with this name."""
-        return _WitVariant('named', value)
+class ToolChoice_Named(ToolChoice, _WitVariantCase):
+    """Model must call the tool with this name."""
+    tag = 'named'
 
+_ToolChoice_CASES: dict[str, type] = {
+    'auto': ToolChoice_Auto,
+    'any': ToolChoice_Any,
+    'named': ToolChoice_Named,
+}
+
+def _ToolChoice_lift(raw: _WitVariant) -> ToolChoice:
+    cls = _ToolChoice_CASES.get(raw.tag)
+    if cls is None:
+        raise ValueError(f'unknown ToolChoice arm: {raw.tag!r}')
+    return cls(raw.payload)
+ToolChoice.lift = staticmethod(_ToolChoice_lift)  # type: ignore[attr-defined]
 
 class ToolEventStream:
-    """Pull-based stream of tool events. Mirrors `event-stream` from the
-`streaming` interface; same drop-in-to-`stream<T>` story."""
+    """Pull-based stream of tool events. Sync-WIT placeholder for
+`stream<tool-stream-event>`."""
     # Wraps a wasmtime-py ResourceAny / ResourceHost handle.
     # The runtime sets ._handle to the underlying resource and
     # ._invoke to a callable that dispatches a method by WIT name.
@@ -2693,58 +2726,50 @@ class ToolEventStream:
 
 class ToolError:
     """Why a tool call failed."""
-    # Tagged variant: each arm wraps in ``Variant(tag, payload)``.
+    pass
 
-    @staticmethod
-    def unknown(value: str) -> Any:
-        """No tool registered under the given name."""
-        return _WitVariant('unknown', value)
+class ToolError_Unknown(ToolError, _WitVariantCase):
+    """No tool registered under the given name."""
+    tag = 'unknown'
 
-    @staticmethod
-    def invalid_input(value: str) -> Any:
-        """Tool input didn't match the declared input schema."""
-        return _WitVariant('invalid-input', value)
+class ToolError_InvalidInput(ToolError, _WitVariantCase):
+    """Tool input didn't match the declared input schema."""
+    tag = 'invalid-input'
 
-    @staticmethod
-    def execution_failed(value: str) -> Any:
-        """Tool ran but returned an error result."""
-        return _WitVariant('execution-failed', value)
+class ToolError_ExecutionFailed(ToolError, _WitVariantCase):
+    """Tool ran but returned an error result."""
+    tag = 'execution-failed'
 
-    @staticmethod
-    def timed_out() -> Any:
-        """Tool exceeded its time budget."""
-        return _WitVariant('timed-out')
+class ToolError_TimedOut(ToolError, _WitVariantCase):
+    """Tool exceeded its time budget."""
+    tag = 'timed-out'
 
-    @staticmethod
-    def cancelled() -> Any:
-        """Tool was cancelled before completion."""
-        return _WitVariant('cancelled')
+class ToolError_Cancelled(ToolError, _WitVariantCase):
+    """Tool was cancelled before completion."""
+    tag = 'cancelled'
 
-    @staticmethod
-    def internal(value: str) -> Any:
-        """Catch-all for internal failures."""
-        return _WitVariant('internal', value)
+class ToolError_Internal(ToolError, _WitVariantCase):
+    """Catch-all for internal failures."""
+    tag = 'internal'
 
+_ToolError_CASES: dict[str, type] = {
+    'unknown': ToolError_Unknown,
+    'invalid-input': ToolError_InvalidInput,
+    'execution-failed': ToolError_ExecutionFailed,
+    'timed-out': ToolError_TimedOut,
+    'cancelled': ToolError_Cancelled,
+    'internal': ToolError_Internal,
+}
 
-class ToolStreamEvent:
-    """Incremental event emitted by a streaming tool while running."""
-    # Untagged variant: each arm returns its bare payload (or ``None`` for unit arms).
+def _ToolError_lift(raw: _WitVariant) -> ToolError:
+    cls = _ToolError_CASES.get(raw.tag)
+    if cls is None:
+        raise ValueError(f'unknown ToolError arm: {raw.tag!r}')
+    return cls(raw.payload)
+ToolError.lift = staticmethod(_ToolError_lift)  # type: ignore[attr-defined]
 
-    @staticmethod
-    def data(value: str) -> Any:
-        """Partial progress data as a JSON value."""
-        return value
-
-    @staticmethod
-    def complete(value: list[ToolResultContent]) -> Any:
-        """Final completion (success)."""
-        return value
-
-    @staticmethod
-    def error(value: ToolError) -> Any:
-        """Terminal error."""
-        return value
-
+ToolStreamEvent = str | list[ToolResultContent] | ToolError
+"""Incremental event emitted by a streaming tool while running."""
 
 class McpConnectionState(str):
     """Connection state of an MCP client."""
@@ -2880,23 +2905,32 @@ class SseTransportConfig:
 
 class McpTransport:
     """How the client talks to the MCP server."""
-    # Tagged variant: each arm wraps in ``Variant(tag, payload)``.
+    pass
 
-    @staticmethod
-    def stdio(value: StdioTransportConfig) -> Any:
-        """STDIO transport. Spawn a local process and talk via pipes."""
-        return _WitVariant('stdio', value)
+class McpTransport_Stdio(McpTransport, _WitVariantCase):
+    """STDIO transport. Spawn a local process and talk via pipes."""
+    tag = 'stdio'
 
-    @staticmethod
-    def streamable_http(value: HttpTransportConfig) -> Any:
-        """Streamable HTTP transport, per the current MCP specification."""
-        return _WitVariant('streamable-http', value)
+class McpTransport_StreamableHttp(McpTransport, _WitVariantCase):
+    """Streamable HTTP transport, per the current MCP specification."""
+    tag = 'streamable-http'
 
-    @staticmethod
-    def sse(value: SseTransportConfig) -> Any:
-        """Legacy Server-Sent Events transport. Retained for older servers."""
-        return _WitVariant('sse', value)
+class McpTransport_Sse(McpTransport, _WitVariantCase):
+    """Legacy Server-Sent Events transport. Retained for older servers."""
+    tag = 'sse'
 
+_McpTransport_CASES: dict[str, type] = {
+    'stdio': McpTransport_Stdio,
+    'streamable-http': McpTransport_StreamableHttp,
+    'sse': McpTransport_Sse,
+}
+
+def _McpTransport_lift(raw: _WitVariant) -> McpTransport:
+    cls = _McpTransport_CASES.get(raw.tag)
+    if cls is None:
+        raise ValueError(f'unknown McpTransport arm: {raw.tag!r}')
+    return cls(raw.payload)
+McpTransport.lift = staticmethod(_McpTransport_lift)  # type: ignore[attr-defined]
 
 class TasksConfig:
     """Task-augmented tool execution. Enables long-running tools with
@@ -3087,9 +3121,7 @@ to keep traces compact; structured payloads belong on `message`."""
 
 
 class AgentTrace:
-    """In-memory trace node collected during an invocation. Traces form a
-tree linked by `parent-id`. Reconstruct the tree by grouping on
-that field."""
+    """In-memory trace node. Returned flat; reconstruct the tree via `parent-id`."""
     def __init__(
         self,
         *,
@@ -3315,9 +3347,7 @@ class AgentMetrics:
 
 
 class ToolUseData:
-    """Mutable tool-use descriptor carried on tool-call hook events. Matches
-the shape of the tool-use block the model emitted; `before-tool-call`
-hooks may rewrite fields before execution."""
+    """Mutable tool-use descriptor. `before-tool-call` hooks may rewrite fields."""
     def __init__(
         self,
         *,
@@ -3371,8 +3401,7 @@ class HookRedaction:
 
 
 class ModelStopData:
-    """Response from a model invocation containing the message and stop
-reason, surfaced on `after-model-call`."""
+    """Model response surfaced on `after-model-call`."""
     def __init__(
         self,
         *,
@@ -3728,9 +3757,7 @@ class ModelStreamUpdateData:
 
 
 class InputRedaction:
-    """Input content redaction emitted when a guardrail blocks input.
-The original input is still available in the conversation history,
-so only the replacement is carried here."""
+    """Input redaction emitted when a guardrail blocks input. Original is in history."""
     def __init__(
         self,
         *,
@@ -3755,7 +3782,7 @@ so only the replacement is carried here."""
 
 
 class OutputRedaction:
-    """Output content redaction emitted when a guardrail blocks output."""
+    """Output redaction emitted when a guardrail blocks output."""
     def __init__(
         self,
         *,
@@ -3786,9 +3813,7 @@ class OutputRedaction:
 
 
 class RedactionEvent:
-    """Redaction event emitted when a guardrail blocks content. Input and
-output redactions are independent fields. At least one is always
-present in practice; both may be present at once."""
+    """Redaction event. Input and output fields are independent; at least one is set."""
     def __init__(
         self,
         *,
@@ -3872,186 +3897,194 @@ class AgentResultData:
 
 class StreamError:
     """Why the agent loop surfaced an error mid-stream."""
-    # Tagged variant: each arm wraps in ``Variant(tag, payload)``.
+    pass
 
-    @staticmethod
-    def model(value: ModelError) -> Any:
-        """A model call failed."""
-        return _WitVariant('model', value)
+class StreamError_Model(StreamError, _WitVariantCase):
+    """A model call failed."""
+    tag = 'model'
 
-    @staticmethod
-    def tool(value: ToolError) -> Any:
-        """A tool call failed."""
-        return _WitVariant('tool', value)
+class StreamError_Tool(StreamError, _WitVariantCase):
+    """A tool call failed."""
+    tag = 'tool'
 
-    @staticmethod
-    def context_window_exceeded() -> Any:
-        """Input exceeded the model's context window and no conversation
+class StreamError_ContextWindowExceeded(StreamError, _WitVariantCase):
+    """Input exceeded the model's context window and no conversation
 manager could recover."""
-        return _WitVariant('context-window-exceeded')
+    tag = 'context-window-exceeded'
 
-    @staticmethod
-    def max_tokens_reached() -> Any:
-        """Exceeded the model's max-tokens budget mid-response."""
-        return _WitVariant('max-tokens-reached')
+class StreamError_MaxTokensReached(StreamError, _WitVariantCase):
+    """Exceeded the model's max-tokens budget mid-response."""
+    tag = 'max-tokens-reached'
 
-    @staticmethod
-    def structured_output_unavailable() -> Any:
-        """Structured output was requested but the model never called the
+class StreamError_StructuredOutputUnavailable(StreamError, _WitVariantCase):
+    """Structured output was requested but the model never called the
 tool, even after being forced."""
-        return _WitVariant('structured-output-unavailable')
+    tag = 'structured-output-unavailable'
 
-    @staticmethod
-    def internal(value: str) -> Any:
-        """Catch-all for internal failures."""
-        return _WitVariant('internal', value)
+class StreamError_Internal(StreamError, _WitVariantCase):
+    """Catch-all for internal failures."""
+    tag = 'internal'
 
+_StreamError_CASES: dict[str, type] = {
+    'model': StreamError_Model,
+    'tool': StreamError_Tool,
+    'context-window-exceeded': StreamError_ContextWindowExceeded,
+    'max-tokens-reached': StreamError_MaxTokensReached,
+    'structured-output-unavailable': StreamError_StructuredOutputUnavailable,
+    'internal': StreamError_Internal,
+}
+
+def _StreamError_lift(raw: _WitVariant) -> StreamError:
+    cls = _StreamError_CASES.get(raw.tag)
+    if cls is None:
+        raise ValueError(f'unknown StreamError arm: {raw.tag!r}')
+    return cls(raw.payload)
+StreamError.lift = staticmethod(_StreamError_lift)  # type: ignore[attr-defined]
 
 class StreamEvent:
     """Events yielded during agent streaming.
+Hot-path arms: `text-delta`, `tool-use`, `tool-result`. Other content
+blocks flow through `content`. Lifecycle arms (`before-invocation`
+through `agent-result`) mirror a hook system and can be filtered by tag."""
+    pass
 
-The `text-delta`, `tool-use`, and `tool-result` arms are hot-path
-events emitted at interactive rates. Everything else (reasoning,
-images, video, documents, citations, cache points, guard content)
-flows through `content`, carrying a fully-typed `content-block`.
+class StreamEvent_TextDelta(StreamEvent, _WitVariantCase):
+    """Incremental text from the model."""
+    tag = 'text-delta'
 
-Lifecycle arms (`before-invocation` through `agent-result`) expose
-the same points a hook system would subscribe to. Callers filter
-the event stream on the arm tag to implement hook-like behavior."""
-    # Tagged variant: each arm wraps in ``Variant(tag, payload)``.
+class StreamEvent_ToolUse(StreamEvent, _WitVariantCase):
+    """Model requested a tool call."""
+    tag = 'tool-use'
 
-    @staticmethod
-    def text_delta(value: str) -> Any:
-        """Incremental text from the model."""
-        return _WitVariant('text-delta', value)
+class StreamEvent_ToolResult(StreamEvent, _WitVariantCase):
+    """Tool call completed."""
+    tag = 'tool-result'
 
-    @staticmethod
-    def tool_use(value: ToolUseBlock) -> Any:
-        """Model requested a tool call."""
-        return _WitVariant('tool-use', value)
+class StreamEvent_Content(StreamEvent, _WitVariantCase):
+    """Non-hot-path content block (image, reasoning, citations, etc)."""
+    tag = 'content'
 
-    @staticmethod
-    def tool_result(value: ToolResultBlock) -> Any:
-        """Tool call completed."""
-        return _WitVariant('tool-result', value)
+class StreamEvent_Metadata(StreamEvent, _WitVariantCase):
+    """Cumulative usage and metrics snapshot."""
+    tag = 'metadata'
 
-    @staticmethod
-    def content(value: ContentBlock) -> Any:
-        """Non-hot-path content block (image, reasoning, citations, etc)."""
-        return _WitVariant('content', value)
+class StreamEvent_Stop(StreamEvent, _WitVariantCase):
+    """Terminal event for the stream."""
+    tag = 'stop'
 
-    @staticmethod
-    def metadata(value: MetadataEvent) -> Any:
-        """Cumulative usage and metrics snapshot."""
-        return _WitVariant('metadata', value)
+class StreamEvent_Redaction(StreamEvent, _WitVariantCase):
+    """Guardrail redaction fired."""
+    tag = 'redaction'
 
-    @staticmethod
-    def stop(value: StopEvent) -> Any:
-        """Terminal event for the stream."""
-        return _WitVariant('stop', value)
+class StreamEvent_Error(StreamEvent, _WitVariantCase):
+    """Recoverable error surfaced mid-stream."""
+    tag = 'error'
 
-    @staticmethod
-    def redaction(value: RedactionEvent) -> Any:
-        """Guardrail redaction fired."""
-        return _WitVariant('redaction', value)
+class StreamEvent_Interrupt(StreamEvent, _WitVariantCase):
+    """Human-in-the-loop pause; resume via `response-stream.respond`."""
+    tag = 'interrupt'
 
-    @staticmethod
-    def error(value: StreamError) -> Any:
-        """Recoverable error surfaced mid-stream."""
-        return _WitVariant('error', value)
+class StreamEvent_Initialized(StreamEvent, _WitVariantCase):
+    """Agent finished construction."""
+    tag = 'initialized'
 
-    @staticmethod
-    def interrupt(value: Interrupt) -> Any:
-        """Human-in-the-loop pause. The invocation halts until the caller
-resumes with a matching `interrupt-response` via
-`response-stream.respond`."""
-        return _WitVariant('interrupt', value)
+class StreamEvent_BeforeInvocation(StreamEvent, _WitVariantCase):
+    """About to process a user invocation."""
+    tag = 'before-invocation'
 
-    @staticmethod
-    def initialized() -> Any:
-        """Agent finished construction."""
-        return _WitVariant('initialized')
+class StreamEvent_AfterInvocation(StreamEvent, _WitVariantCase):
+    """Finished processing a user invocation."""
+    tag = 'after-invocation'
 
-    @staticmethod
-    def before_invocation(value: BeforeInvocationData) -> Any:
-        """About to process a user invocation."""
-        return _WitVariant('before-invocation', value)
+class StreamEvent_MessageAdded(StreamEvent, _WitVariantCase):
+    """A message was appended to the conversation."""
+    tag = 'message-added'
 
-    @staticmethod
-    def after_invocation(value: AfterInvocationData) -> Any:
-        """Finished processing a user invocation."""
-        return _WitVariant('after-invocation', value)
+class StreamEvent_BeforeModelCall(StreamEvent, _WitVariantCase):
+    """About to call the model."""
+    tag = 'before-model-call'
 
-    @staticmethod
-    def message_added(value: MessageAddedData) -> Any:
-        """A message was appended to the conversation."""
-        return _WitVariant('message-added', value)
+class StreamEvent_AfterModelCall(StreamEvent, _WitVariantCase):
+    """Model call returned."""
+    tag = 'after-model-call'
 
-    @staticmethod
-    def before_model_call(value: BeforeModelCallData) -> Any:
-        """About to call the model."""
-        return _WitVariant('before-model-call', value)
+class StreamEvent_BeforeTools(StreamEvent, _WitVariantCase):
+    """About to run a batch of tool calls from one assistant turn."""
+    tag = 'before-tools'
 
-    @staticmethod
-    def after_model_call(value: AfterModelCallData) -> Any:
-        """Model call returned."""
-        return _WitVariant('after-model-call', value)
+class StreamEvent_AfterTools(StreamEvent, _WitVariantCase):
+    """Tool batch finished."""
+    tag = 'after-tools'
 
-    @staticmethod
-    def before_tools(value: ToolsBatchData) -> Any:
-        """About to run a batch of tool calls from one assistant turn."""
-        return _WitVariant('before-tools', value)
+class StreamEvent_BeforeToolCall(StreamEvent, _WitVariantCase):
+    """About to call a single tool."""
+    tag = 'before-tool-call'
 
-    @staticmethod
-    def after_tools(value: ToolsBatchData) -> Any:
-        """Tool batch finished."""
-        return _WitVariant('after-tools', value)
+class StreamEvent_AfterToolCall(StreamEvent, _WitVariantCase):
+    """Tool call returned."""
+    tag = 'after-tool-call'
 
-    @staticmethod
-    def before_tool_call(value: BeforeToolCallData) -> Any:
-        """About to call a single tool."""
-        return _WitVariant('before-tool-call', value)
+class StreamEvent_ContentBlock(StreamEvent, _WitVariantCase):
+    """A content block was assembled during streaming."""
+    tag = 'content-block'
 
-    @staticmethod
-    def after_tool_call(value: AfterToolCallData) -> Any:
-        """Tool call returned."""
-        return _WitVariant('after-tool-call', value)
+class StreamEvent_ModelMessage(StreamEvent, _WitVariantCase):
+    """Model finished producing a full message."""
+    tag = 'model-message'
 
-    @staticmethod
-    def content_block(value: ContentBlockData) -> Any:
-        """A content block was assembled during streaming."""
-        return _WitVariant('content-block', value)
+class StreamEvent_ToolResultHook(StreamEvent, _WitVariantCase):
+    """Tool finished execution (completion event, not streaming update)."""
+    tag = 'tool-result-hook'
 
-    @staticmethod
-    def model_message(value: ModelMessageData) -> Any:
-        """Model finished producing a full message."""
-        return _WitVariant('model-message', value)
+class StreamEvent_ToolUpdate(StreamEvent, _WitVariantCase):
+    """Streaming update from a tool."""
+    tag = 'tool-update'
 
-    @staticmethod
-    def tool_result_hook(value: ToolResultData) -> Any:
-        """Tool finished execution (completion event, not streaming update)."""
-        return _WitVariant('tool-result-hook', value)
+class StreamEvent_ModelUpdate(StreamEvent, _WitVariantCase):
+    """Streaming update from the model."""
+    tag = 'model-update'
 
-    @staticmethod
-    def tool_update(value: ToolStreamUpdateData) -> Any:
-        """Streaming update from a tool."""
-        return _WitVariant('tool-update', value)
+class StreamEvent_AgentResult(StreamEvent, _WitVariantCase):
+    """Final event for an invocation, carrying the terminal result."""
+    tag = 'agent-result'
 
-    @staticmethod
-    def model_update(value: ModelStreamUpdateData) -> Any:
-        """Streaming update from the model."""
-        return _WitVariant('model-update', value)
+_StreamEvent_CASES: dict[str, type] = {
+    'text-delta': StreamEvent_TextDelta,
+    'tool-use': StreamEvent_ToolUse,
+    'tool-result': StreamEvent_ToolResult,
+    'content': StreamEvent_Content,
+    'metadata': StreamEvent_Metadata,
+    'stop': StreamEvent_Stop,
+    'redaction': StreamEvent_Redaction,
+    'error': StreamEvent_Error,
+    'interrupt': StreamEvent_Interrupt,
+    'initialized': StreamEvent_Initialized,
+    'before-invocation': StreamEvent_BeforeInvocation,
+    'after-invocation': StreamEvent_AfterInvocation,
+    'message-added': StreamEvent_MessageAdded,
+    'before-model-call': StreamEvent_BeforeModelCall,
+    'after-model-call': StreamEvent_AfterModelCall,
+    'before-tools': StreamEvent_BeforeTools,
+    'after-tools': StreamEvent_AfterTools,
+    'before-tool-call': StreamEvent_BeforeToolCall,
+    'after-tool-call': StreamEvent_AfterToolCall,
+    'content-block': StreamEvent_ContentBlock,
+    'model-message': StreamEvent_ModelMessage,
+    'tool-result-hook': StreamEvent_ToolResultHook,
+    'tool-update': StreamEvent_ToolUpdate,
+    'model-update': StreamEvent_ModelUpdate,
+    'agent-result': StreamEvent_AgentResult,
+}
 
-    @staticmethod
-    def agent_result(value: AgentResultData) -> Any:
-        """Final event for an invocation, carrying the terminal result."""
-        return _WitVariant('agent-result', value)
-
+def _StreamEvent_lift(raw: _WitVariant) -> StreamEvent:
+    cls = _StreamEvent_CASES.get(raw.tag)
+    if cls is None:
+        raise ValueError(f'unknown StreamEvent arm: {raw.tag!r}')
+    return cls(raw.payload)
+StreamEvent.lift = staticmethod(_StreamEvent_lift)  # type: ignore[attr-defined]
 
 class ModelEventStream:
-    """Pull-based stream of model events from a custom provider.
-Distinct from `api.event-stream` so its `read` lands on the
-import side (host produces, guest reads)."""
+    """Pull-based stream of model events from a custom provider; host produces, guest reads."""
     # Wraps a wasmtime-py ResourceAny / ResourceHost handle.
     # The runtime sets ._handle to the underlying resource and
     # ._invoke to a callable that dispatches a method by WIT name.
@@ -4260,18 +4293,27 @@ class MultiAgentNodeConfig:
 
 class NodeConfig:
     """Any node a graph or swarm can execute."""
-    # Tagged variant: each arm wraps in ``Variant(tag, payload)``.
+    pass
 
-    @staticmethod
-    def agent(value: AgentNodeConfig) -> Any:
-        """Wraps a single agent."""
-        return _WitVariant('agent', value)
+class NodeConfig_Agent(NodeConfig, _WitVariantCase):
+    """Wraps a single agent."""
+    tag = 'agent'
 
-    @staticmethod
-    def multi_agent(value: MultiAgentNodeConfig) -> Any:
-        """Wraps a nested orchestrator."""
-        return _WitVariant('multi-agent', value)
+class NodeConfig_MultiAgent(NodeConfig, _WitVariantCase):
+    """Wraps a nested orchestrator."""
+    tag = 'multi-agent'
 
+_NodeConfig_CASES: dict[str, type] = {
+    'agent': NodeConfig_Agent,
+    'multi-agent': NodeConfig_MultiAgent,
+}
+
+def _NodeConfig_lift(raw: _WitVariant) -> NodeConfig:
+    cls = _NodeConfig_CASES.get(raw.tag)
+    if cls is None:
+        raise ValueError(f'unknown NodeConfig arm: {raw.tag!r}')
+    return cls(raw.payload)
+NodeConfig.lift = staticmethod(_NodeConfig_lift)  # type: ignore[attr-defined]
 
 class EdgeHandler:
     """Condition attached to a graph edge."""
@@ -4415,38 +4457,47 @@ class SwarmConfig:
 
 class NodeError:
     """Why a node or run ended in `failed` status."""
-    # Tagged variant: each arm wraps in ``Variant(tag, payload)``.
+    pass
 
-    @staticmethod
-    def execution(value: str) -> Any:
-        """An underlying agent or nested orchestrator failed."""
-        return _WitVariant('execution', value)
+class NodeError_Execution(NodeError, _WitVariantCase):
+    """An underlying agent or nested orchestrator failed."""
+    tag = 'execution'
 
-    @staticmethod
-    def timeout() -> Any:
-        """Wall-clock ceiling was exceeded."""
-        return _WitVariant('timeout')
+class NodeError_Timeout(NodeError, _WitVariantCase):
+    """Wall-clock ceiling was exceeded."""
+    tag = 'timeout'
 
-    @staticmethod
-    def limit_exceeded(value: str) -> Any:
-        """A declared runtime limit (max-steps, max-concurrency) was hit."""
-        return _WitVariant('limit-exceeded', value)
+class NodeError_LimitExceeded(NodeError, _WitVariantCase):
+    """A declared runtime limit (max-steps, max-concurrency) was hit."""
+    tag = 'limit-exceeded'
 
-    @staticmethod
-    def edge_handler(value: str) -> Any:
-        """Edge handler rejected the traversal with an error."""
-        return _WitVariant('edge-handler', value)
+class NodeError_EdgeHandler(NodeError, _WitVariantCase):
+    """Edge handler rejected the traversal with an error."""
+    tag = 'edge-handler'
 
-    @staticmethod
-    def invalid_config(value: str) -> Any:
-        """Invalid configuration detected at run time."""
-        return _WitVariant('invalid-config', value)
+class NodeError_InvalidConfig(NodeError, _WitVariantCase):
+    """Invalid configuration detected at run time."""
+    tag = 'invalid-config'
 
-    @staticmethod
-    def internal(value: str) -> Any:
-        """Catch-all for internal failures."""
-        return _WitVariant('internal', value)
+class NodeError_Internal(NodeError, _WitVariantCase):
+    """Catch-all for internal failures."""
+    tag = 'internal'
 
+_NodeError_CASES: dict[str, type] = {
+    'execution': NodeError_Execution,
+    'timeout': NodeError_Timeout,
+    'limit-exceeded': NodeError_LimitExceeded,
+    'edge-handler': NodeError_EdgeHandler,
+    'invalid-config': NodeError_InvalidConfig,
+    'internal': NodeError_Internal,
+}
+
+def _NodeError_lift(raw: _WitVariant) -> NodeError:
+    cls = _NodeError_CASES.get(raw.tag)
+    if cls is None:
+        raise ValueError(f'unknown NodeError arm: {raw.tag!r}')
+    return cls(raw.payload)
+NodeError.lift = staticmethod(_NodeError_lift)  # type: ignore[attr-defined]
 
 class NodeResult:
     """Result of a single node execution."""
@@ -4635,48 +4686,66 @@ class HandoffEvent:
 
 class MultiAgentStreamEvent:
     """Events emitted while streaming a multi-agent run."""
-    # Tagged variant: each arm wraps in ``Variant(tag, payload)``.
+    pass
 
-    @staticmethod
-    def node_start(value: NodeStartData) -> Any:
-        """A node began executing."""
-        return _WitVariant('node-start', value)
+class MultiAgentStreamEvent_NodeStart(MultiAgentStreamEvent, _WitVariantCase):
+    """A node began executing."""
+    tag = 'node-start'
 
-    @staticmethod
-    def nested(value: NodeEventData) -> Any:
-        """A nested stream event from a running node."""
-        return _WitVariant('nested', value)
+class MultiAgentStreamEvent_Nested(MultiAgentStreamEvent, _WitVariantCase):
+    """A nested stream event from a running node."""
+    tag = 'nested'
 
-    @staticmethod
-    def node_stop(value: NodeResult) -> Any:
-        """A node finished executing."""
-        return _WitVariant('node-stop', value)
+class MultiAgentStreamEvent_NodeStop(MultiAgentStreamEvent, _WitVariantCase):
+    """A node finished executing."""
+    tag = 'node-stop'
 
-    @staticmethod
-    def handoff(value: HandoffEvent) -> Any:
-        """A handoff happened between nodes."""
-        return _WitVariant('handoff', value)
+class MultiAgentStreamEvent_Handoff(MultiAgentStreamEvent, _WitVariantCase):
+    """A handoff happened between nodes."""
+    tag = 'handoff'
 
-    @staticmethod
-    def run_complete(value: MultiAgentResult) -> Any:
-        """Terminal result for the run."""
-        return _WitVariant('run-complete', value)
+class MultiAgentStreamEvent_RunComplete(MultiAgentStreamEvent, _WitVariantCase):
+    """Terminal result for the run."""
+    tag = 'run-complete'
 
+_MultiAgentStreamEvent_CASES: dict[str, type] = {
+    'node-start': MultiAgentStreamEvent_NodeStart,
+    'nested': MultiAgentStreamEvent_Nested,
+    'node-stop': MultiAgentStreamEvent_NodeStop,
+    'handoff': MultiAgentStreamEvent_Handoff,
+    'run-complete': MultiAgentStreamEvent_RunComplete,
+}
+
+def _MultiAgentStreamEvent_lift(raw: _WitVariant) -> MultiAgentStreamEvent:
+    cls = _MultiAgentStreamEvent_CASES.get(raw.tag)
+    if cls is None:
+        raise ValueError(f'unknown MultiAgentStreamEvent arm: {raw.tag!r}')
+    return cls(raw.payload)
+MultiAgentStreamEvent.lift = staticmethod(_MultiAgentStreamEvent_lift)  # type: ignore[attr-defined]
 
 class EdgeHandlerError:
     """Why an edge evaluation failed."""
-    # Tagged variant: each arm wraps in ``Variant(tag, payload)``.
+    pass
 
-    @staticmethod
-    def unknown(value: str) -> Any:
-        """No handler registered for the given id."""
-        return _WitVariant('unknown', value)
+class EdgeHandlerError_Unknown(EdgeHandlerError, _WitVariantCase):
+    """No handler registered for the given id."""
+    tag = 'unknown'
 
-    @staticmethod
-    def failed(value: str) -> Any:
-        """Handler raised an exception."""
-        return _WitVariant('failed', value)
+class EdgeHandlerError_Failed(EdgeHandlerError, _WitVariantCase):
+    """Handler raised an exception."""
+    tag = 'failed'
 
+_EdgeHandlerError_CASES: dict[str, type] = {
+    'unknown': EdgeHandlerError_Unknown,
+    'failed': EdgeHandlerError_Failed,
+}
+
+def _EdgeHandlerError_lift(raw: _WitVariant) -> EdgeHandlerError:
+    cls = _EdgeHandlerError_CASES.get(raw.tag)
+    if cls is None:
+        raise ValueError(f'unknown EdgeHandlerError arm: {raw.tag!r}')
+    return cls(raw.payload)
+EdgeHandlerError.lift = staticmethod(_EdgeHandlerError_lift)  # type: ignore[attr-defined]
 
 class HandlerState:
     """State snapshot passed to `evaluate` so the handler can branch on
@@ -4814,28 +4883,37 @@ class NotebookToolConfig:
 
 class VendedTool:
     """Built-in tools."""
-    # Tagged variant: each arm wraps in ``Variant(tag, payload)``.
+    pass
 
-    @staticmethod
-    def bash(value: BashToolConfig) -> Any:
-        """Run shell commands in a persistent bash session."""
-        return _WitVariant('bash', value)
+class VendedTool_Bash(VendedTool, _WitVariantCase):
+    """Run shell commands in a persistent bash session."""
+    tag = 'bash'
 
-    @staticmethod
-    def file_editor(value: FileEditorToolConfig) -> Any:
-        """Create, view, and edit files on disk."""
-        return _WitVariant('file-editor', value)
+class VendedTool_FileEditor(VendedTool, _WitVariantCase):
+    """Create, view, and edit files on disk."""
+    tag = 'file-editor'
 
-    @staticmethod
-    def http_request(value: HttpRequestToolConfig) -> Any:
-        """Make HTTP requests."""
-        return _WitVariant('http-request', value)
+class VendedTool_HttpRequest(VendedTool, _WitVariantCase):
+    """Make HTTP requests."""
+    tag = 'http-request'
 
-    @staticmethod
-    def notebook(value: NotebookToolConfig) -> Any:
-        """Read and execute Jupyter notebook cells."""
-        return _WitVariant('notebook', value)
+class VendedTool_Notebook(VendedTool, _WitVariantCase):
+    """Read and execute Jupyter notebook cells."""
+    tag = 'notebook'
 
+_VendedTool_CASES: dict[str, type] = {
+    'bash': VendedTool_Bash,
+    'file-editor': VendedTool_FileEditor,
+    'http-request': VendedTool_HttpRequest,
+    'notebook': VendedTool_Notebook,
+}
+
+def _VendedTool_lift(raw: _WitVariant) -> VendedTool:
+    cls = _VendedTool_CASES.get(raw.tag)
+    if cls is None:
+        raise ValueError(f'unknown VendedTool arm: {raw.tag!r}')
+    return cls(raw.payload)
+VendedTool.lift = staticmethod(_VendedTool_lift)  # type: ignore[attr-defined]
 
 class SkillSource:
     """Location of a skill definition on disk."""
@@ -4932,18 +5010,27 @@ class ContextOffloaderPluginConfig:
 
 class VendedPlugin:
     """Built-in plugins."""
-    # Tagged variant: each arm wraps in ``Variant(tag, payload)``.
+    pass
 
-    @staticmethod
-    def skills(value: SkillsPluginConfig) -> Any:
-        """Load and activate Anthropic-style skills from disk."""
-        return _WitVariant('skills', value)
+class VendedPlugin_Skills(VendedPlugin, _WitVariantCase):
+    """Load and activate Anthropic-style skills from disk."""
+    tag = 'skills'
 
-    @staticmethod
-    def context_offloader(value: ContextOffloaderPluginConfig) -> Any:
-        """Offload large tool results to external storage."""
-        return _WitVariant('context-offloader', value)
+class VendedPlugin_ContextOffloader(VendedPlugin, _WitVariantCase):
+    """Offload large tool results to external storage."""
+    tag = 'context-offloader'
 
+_VendedPlugin_CASES: dict[str, type] = {
+    'skills': VendedPlugin_Skills,
+    'context-offloader': VendedPlugin_ContextOffloader,
+}
+
+def _VendedPlugin_lift(raw: _WitVariant) -> VendedPlugin:
+    cls = _VendedPlugin_CASES.get(raw.tag)
+    if cls is None:
+        raise ValueError(f'unknown VendedPlugin arm: {raw.tag!r}')
+    return cls(raw.payload)
+VendedPlugin.lift = staticmethod(_VendedPlugin_lift)  # type: ignore[attr-defined]
 
 class ConcurrentOptions:
     """Concurrent-execution options."""
@@ -4970,51 +5057,15 @@ class ConcurrentOptions:
         return id(self)
 
 
-class ToolExecutorStrategy:
-    """Strategy for executing tool calls emitted in a single assistant turn."""
-    # Untagged variant: each arm returns its bare payload (or ``None`` for unit arms).
+ToolExecutorStrategy = None | ConcurrentOptions
+"""Strategy for executing tool calls emitted in a single assistant turn."""
 
-    @staticmethod
-    def sequential() -> Any:
-        """Run tool calls one at a time, in order."""
-        return None
-
-    @staticmethod
-    def concurrent(value: ConcurrentOptions) -> Any:
-        """Run tool calls in parallel (default)."""
-        return value
-
-
-class AttributeValue:
-    """Scalar attribute value attached to a trace."""
-    # Untagged variant: each arm returns its bare payload (or ``None`` for unit arms).
-
-    @staticmethod
-    def string_value(value: str) -> Any:
-        """String value."""
-        return value
-
-    @staticmethod
-    def int_value(value: int) -> Any:
-        """64-bit signed integer."""
-        return value
-
-    @staticmethod
-    def double_value(value: float) -> Any:
-        """64-bit float."""
-        return value
-
-    @staticmethod
-    def bool_value(value: bool) -> Any:
-        """Boolean."""
-        return value
-
+AttributeValue = str | int | float | bool
+"""Scalar attribute value attached to a trace."""
 
 class TraceAttribute:
-    """Single key-value pair attached to every OpenTelemetry span the
-agent emits. The OTEL-typed `attribute-value` distinguishes these
-from `streaming.trace-metadata-entry`, which annotates local
-in-memory trace nodes and only carries strings."""
+    """Key-value pair attached to every OpenTelemetry span the agent emits.
+Distinct from `streaming.trace-metadata-entry`, which is string-only."""
     def __init__(
         self,
         *,
@@ -5037,8 +5088,7 @@ in-memory trace nodes and only carries strings."""
 
 
 class TraceContext:
-    """W3C Trace Context propagation headers. Links the agent's spans to a
-caller-supplied trace."""
+    """W3C Trace Context headers linking the agent's spans to a caller's trace."""
     def __init__(
         self,
         *,
@@ -5061,8 +5111,7 @@ caller-supplied trace."""
 
 
 class AgentIdentity:
-    """Display-level identity of the agent. All fields are optional and
-fall back to sensible defaults."""
+    """Display-level identity of the agent; all fields default to sensible values."""
     def __init__(
         self,
         *,
@@ -5088,10 +5137,7 @@ fall back to sensible defaults."""
 
 class AgentConfig:
     """Configuration passed to the `agent` constructor.
-
-Invalid configuration is not reported here (resource constructors
-cannot return `result`); errors surface on the first `generate`
-call as `agent-error::invalid-input`."""
+Invalid config surfaces on the first `generate` as `invalid-input`."""
     def __init__(
         self,
         *,
@@ -5269,37 +5315,45 @@ class RespondArgs:
 
 class AgentError:
     """Why an agent-resource call failed."""
-    # Tagged variant: each arm wraps in ``Variant(tag, payload)``.
+    pass
 
-    @staticmethod
-    def no_session_configured() -> Any:
-        """The agent was constructed without a session config."""
-        return _WitVariant('no-session-configured')
+class AgentError_NoSessionConfigured(AgentError, _WitVariantCase):
+    """The agent was constructed without a session config."""
+    tag = 'no-session-configured'
 
-    @staticmethod
-    def storage(value: StorageError) -> Any:
-        """The storage backend rejected the operation."""
-        return _WitVariant('storage', value)
+class AgentError_Storage(AgentError, _WitVariantCase):
+    """The storage backend rejected the operation."""
+    tag = 'storage'
 
-    @staticmethod
-    def invalid_input(value: str) -> Any:
-        """Supplied payload did not match the expected shape."""
-        return _WitVariant('invalid-input', value)
+class AgentError_InvalidInput(AgentError, _WitVariantCase):
+    """Supplied payload did not match the expected shape."""
+    tag = 'invalid-input'
 
-    @staticmethod
-    def unknown_interrupt(value: str) -> Any:
-        """Supplied `interrupt-id` does not match any live interrupt."""
-        return _WitVariant('unknown-interrupt', value)
+class AgentError_UnknownInterrupt(AgentError, _WitVariantCase):
+    """Supplied `interrupt-id` does not match any live interrupt."""
+    tag = 'unknown-interrupt'
 
-    @staticmethod
-    def internal(value: str) -> Any:
-        """Catch-all for internal failures."""
-        return _WitVariant('internal', value)
+class AgentError_Internal(AgentError, _WitVariantCase):
+    """Catch-all for internal failures."""
+    tag = 'internal'
 
+_AgentError_CASES: dict[str, type] = {
+    'no-session-configured': AgentError_NoSessionConfigured,
+    'storage': AgentError_Storage,
+    'invalid-input': AgentError_InvalidInput,
+    'unknown-interrupt': AgentError_UnknownInterrupt,
+    'internal': AgentError_Internal,
+}
+
+def _AgentError_lift(raw: _WitVariant) -> AgentError:
+    cls = _AgentError_CASES.get(raw.tag)
+    if cls is None:
+        raise ValueError(f'unknown AgentError arm: {raw.tag!r}')
+    return cls(raw.payload)
+AgentError.lift = staticmethod(_AgentError_lift)  # type: ignore[attr-defined]
 
 class Agent:
-    """An agent instance. Persistent across `generate` calls, carrying
-conversation state and registered tools."""
+    """An agent instance. Persistent across `generate` calls."""
     # Wraps a wasmtime-py ResourceAny / ResourceHost handle.
     # The runtime sets ._handle to the underlying resource and
     # ._invoke to a callable that dispatches a method by WIT name.
@@ -5350,9 +5404,7 @@ conversation state and registered tools."""
 
 
 class EventStream:
-    """Pull-based stream of agent events. Drain by calling `read` until
-it returns `none`. The host's language binding wraps this as an
-async iterator. Sync-WIT placeholder for `stream<stream-event>`."""
+    """Pull-based stream of agent events; sync-WIT placeholder for `stream<stream-event>`."""
     # Wraps a wasmtime-py ResourceAny / ResourceHost handle.
     # The runtime sets ._handle to the underlying resource and
     # ._invoke to a callable that dispatches a method by WIT name.
@@ -5366,9 +5418,7 @@ async iterator. Sync-WIT placeholder for `stream<stream-event>`."""
 
 
 class ResponseStream:
-    """Handle to an in-flight `generate` invocation. Call `events` once to
-get the event stream and drain it to completion; use `respond` and
-`cancel` out-of-band to drive human-in-the-loop and cancellation."""
+    """Handle to an in-flight `generate` invocation."""
     # Wraps a wasmtime-py ResourceAny / ResourceHost handle.
     # The runtime sets ._handle to the underlying resource and
     # ._invoke to a callable that dispatches a method by WIT name.
