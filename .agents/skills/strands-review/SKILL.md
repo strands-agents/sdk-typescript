@@ -1,6 +1,6 @@
 ---
 name: strands-review
-description: Local preview of the strands-agents/devtools `/strands review` agent. Body is the upstream Task Reviewer SOP verbatim — do not paraphrase. Use when the user types `/strands-review`, asks for a "strands review" of a PR, or wants to anticipate what the remote `/strands review` GitHub Action will flag. Findings are close but not identical to the remote agent. Strongly prefer running this skill in a fresh-context subagent (e.g. via the Agent tool) rather than inline — the SOP is long and reviewer judgment is more reliable when it isn't entangled with the parent conversation's prior context.
+description: Local preview of the strands-agents/devtools `/strands review` agent. Body is the upstream Task Reviewer SOP verbatim — do not paraphrase. Use when the user types `/strands-review`, asks for a "strands review" of a PR, or wants to anticipate what the remote `/strands review` GitHub Action will flag. Findings are close but not identical to the remote agent. Strongly prefer running this skill in a fresh-context subagent rather than inline — the SOP is long and reviewer judgment is more reliable when it isn't entangled with the parent conversation's prior context.
 source: https://github.com/strands-agents/devtools/blob/main/strands-command/agent-sops/task-reviewer.sop.md
 ---
 
