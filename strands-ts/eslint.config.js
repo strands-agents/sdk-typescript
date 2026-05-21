@@ -55,6 +55,9 @@ function sdkRules(options) {
         process: 'readonly',
         setTimeout: 'readonly',
         clearTimeout: 'readonly',
+        atob: 'readonly',
+        btoa: 'readonly',
+        crypto: 'readonly',
       },
     },
     plugins: {

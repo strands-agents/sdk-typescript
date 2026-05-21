@@ -128,6 +128,14 @@ sdk-typescript/
 │   │   │   ├── retry-strategy.ts               # RetryStrategy union type + dedup helper
 │   │   │   └── index.ts
 │   │   │
+│   │   ├── sandbox/              # Sandbox abstraction for agent code execution
+│   │   │   ├── __tests__/
+│   │   │   ├── base.ts           # Abstract Sandbox class
+│   │   │   ├── shell.ts          # ShellSandbox with shell-based defaults
+│   │   │   ├── stream-process.ts # ChildProcess-to-AsyncGenerator bridge
+│   │   │   ├── constants.ts      # Language validation pattern
+│   │   │   └── types.ts          # ExecutionResult, StreamChunk, FileInfo, OutputFile
+│   │   │
 │   │   ├── session/              # Session management
 │   │   │   ├── __tests__/
 │   │   │   ├── session-manager.ts
@@ -172,6 +180,9 @@ sdk-typescript/
 │   │   │   ├── serializable.ts
 │   │   │   ├── snapshot.ts
 │   │   │   └── validation.ts
+│   │   │
+│   │   ├── utils/                # Shared utility functions
+│   │   │   └── shell-quote.ts    # Shell-safe string escaping
 │   │   │
 │   │   ├── vended-plugins/       # Optional vended plugins
 │   │   │   ├── context-offloader/ # Context offloading plugin
@@ -333,10 +344,12 @@ sdk-typescript/
 - **`strands-ts/src/plugins/`**: Plugin system for extending agent functionality
 - **`strands-ts/src/registry/`**: Tool registry implementation
 - **`strands-ts/src/retry/`**: Retry strategies for model calls (backoff strategies, abstract `ModelRetryStrategy` plugin base class, concrete `DefaultModelRetryStrategy`)
+- **`strands-ts/src/sandbox/`**: Sandbox abstraction for agent code execution (abstract `Sandbox` base class, `ShellSandbox` base for shell-based implementations)
 - **`strands-ts/src/session/`**: Session management (file, S3, custom storage)
 - **`strands-ts/src/telemetry/`**: OpenTelemetry tracing and metrics
 - **`strands-ts/src/tools/`**: Tool definitions, types, and structured output validation with Zod schemas
 - **`strands-ts/src/types/`**: Core type definitions used across the SDK
+- **`strands-ts/src/utils/`**: Shared utility functions
 - **`strands-ts/src/vended-plugins/`**: Optional vended plugins (context-offloader, skills — not part of core SDK, independently importable)
 - **`strands-ts/src/vended-tools/`**: Optional vended tools (bash, file-editor, http-request, notebook)
 - **`strands-ts/generated/`**: Auto-generated WIT interface type declarations
