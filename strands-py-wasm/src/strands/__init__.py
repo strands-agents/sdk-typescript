@@ -374,7 +374,26 @@ def _coerce_tool_result(result: Any) -> list[Any]:
 
 
 def _py_type_to_schema(py_type: Any) -> dict[str, Any]:
+    import types
+
     origin = typing.get_origin(py_type)
+
+    # Strip Annotated[T, ...] -- only the runtime type matters for the schema.
+    if origin is typing.Annotated:
+        return _py_type_to_schema(typing.get_args(py_type)[0])
+
+    # Optional[T] / Union[T, None] / T | None: emit T's schema and mark nullable.
+    if origin is typing.Union or origin is types.UnionType:
+        args = typing.get_args(py_type)
+        non_none = [a for a in args if a is not type(None)]
+        nullable = len(non_none) != len(args)
+        if len(non_none) == 1:
+            schema = _py_type_to_schema(non_none[0])
+            if nullable:
+                schema = {**schema, "nullable": True}
+            return schema
+        return {}  # heterogeneous union -- caller should supply input_schema
+
     if py_type is str:
         return {"type": "string"}
     if py_type is int:
@@ -388,6 +407,8 @@ def _py_type_to_schema(py_type: Any) -> dict[str, Any]:
         return {"type": "array", "items": _py_type_to_schema(args[0]) if args else {}}
     if origin is dict:
         return {"type": "object"}
+    if origin is typing.Literal:
+        return {"enum": list(typing.get_args(py_type))}
     return {}
 
 
@@ -1108,7 +1129,20 @@ class Agent:
         tool_choice: _ToolChoiceInput = None,
         structured_output_schema: str | None = None,
     ) -> AgentResult:
-        """Synchronous wrapper around :meth:`invoke_async`."""
+        """Synchronous wrapper around :meth:`invoke_async`.
+
+        Raises :class:`RuntimeError` if called from a running event loop. Use
+        :meth:`invoke_async` directly in Jupyter or async frameworks.
+        """
+        try:
+            asyncio.get_running_loop()
+        except RuntimeError:
+            pass
+        else:
+            raise RuntimeError(
+                "Agent.invoke() cannot run inside an existing event loop. "
+                "Use 'await agent.invoke_async(...)' instead."
+            )
         return asyncio.run(
             self.invoke_async(
                 prompt,
@@ -1167,7 +1201,7 @@ class _AgentResultAccumulator:
         elif isinstance(event, StreamEventInterrupt):
             self._interrupts.append(event.value)
 
-    def finalize(self, agent: "Agent") -> "AgentResult":
+    def finalize(self, agent: Agent) -> AgentResult:
         stop = self._stop
         last = self._last_message
         if last is None:

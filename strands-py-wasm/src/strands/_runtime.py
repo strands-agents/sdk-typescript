@@ -21,8 +21,10 @@ import json
 import logging
 import os
 import threading
+from collections import deque
+from collections.abc import Iterable
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Iterable
+from typing import TYPE_CHECKING, Any
 
 from wasmtime import Config, Engine, Store, WasiConfig
 from wasmtime.component import (
@@ -41,6 +43,7 @@ if TYPE_CHECKING:
 
 
 _GUEST_LOGGER = logging.getLogger("strands.guest")
+logger = logging.getLogger(__name__)
 
 
 _singleton_lock = threading.RLock()
@@ -88,9 +91,6 @@ def _get_component() -> Component:
 
 _TOOL_STREAM_RESOURCE_TYPE_TAG = 0x1
 _tool_stream_resource_type: ResourceType | None = None
-_tool_stream_reps: dict[int, "_HostToolEventStream"] = {}
-_tool_stream_next_rep = 1
-_tool_stream_lock = threading.Lock()
 
 
 class _HostToolEventStream:
@@ -102,7 +102,7 @@ class _HostToolEventStream:
     """
 
     def __init__(self) -> None:
-        self._events: list[Variant] = []
+        self._events: deque[Variant] = deque()
         self._closed = False
 
     def push(self, event: Variant) -> None:
@@ -113,37 +113,49 @@ class _HostToolEventStream:
 
     def read(self) -> Variant | None:
         if self._events:
-            return self._events.pop(0)
+            return self._events.popleft()
         return None
 
 
-def _tool_stream_register(stream: _HostToolEventStream) -> int:
-    global _tool_stream_next_rep
-    with _tool_stream_lock:
-        rep = _tool_stream_next_rep
-        _tool_stream_next_rep += 1
-        _tool_stream_reps[rep] = stream
-        return rep
+class _ToolStreamRegistry:
+    """Per-runtime registry for live host-side tool-event-stream reps.
 
+    Scoped to a single :class:`_AgentRuntime` so streams are bounded by the
+    runtime's lifetime: when the runtime is GC'd, its registry goes with it
+    and any stragglers (e.g. from an aborted invocation) are released.
+    """
 
-def _tool_stream_lookup(rep: int) -> _HostToolEventStream:
-    with _tool_stream_lock:
-        return _tool_stream_reps[rep]
+    def __init__(self) -> None:
+        self._reps: dict[int, _HostToolEventStream] = {}
+        self._next_rep = 1
+        self._lock = threading.Lock()
 
+    def register(self, stream: _HostToolEventStream) -> int:
+        with self._lock:
+            rep = self._next_rep
+            self._next_rep += 1
+            self._reps[rep] = stream
+            return rep
 
-def _tool_stream_drop(_store: Any, rep: int) -> None:
-    with _tool_stream_lock:
-        _tool_stream_reps.pop(rep, None)
+    def lookup(self, rep: int) -> _HostToolEventStream:
+        with self._lock:
+            return self._reps[rep]
+
+    def drop(self, rep: int) -> None:
+        with self._lock:
+            self._reps.pop(rep, None)
 
 
 def _ensure_tool_stream_type() -> ResourceType:
+    # ResourceType identity must be process-stable so wasmtime-py recognizes
+    # the same WIT resource across runtimes.
     global _tool_stream_resource_type
     if _tool_stream_resource_type is None:
         _tool_stream_resource_type = ResourceType.host(_TOOL_STREAM_RESOURCE_TYPE_TAG)
     return _tool_stream_resource_type
 
 
-def _make_tool_call_handler(agent: "Agent"):
+def _make_tool_call_handler(agent: Agent, registry: _ToolStreamRegistry):
     def call_tool(store: Any, args: Any) -> ResourceHost:
         name = getattr(args, "name", "")
         raw_input = getattr(args, "input", "")
@@ -152,6 +164,7 @@ def _make_tool_call_handler(agent: "Agent"):
             tool = agent._lookup_tool(name)
             content_list = tool.invoke(raw_input)
         except Exception as exc:  # noqa: BLE001  surface any tool exception as a tool-error
+            logger.exception("tool %r raised; surfacing as tool-error to guest", name)
             stream.push(_t.ToolStreamEvent.error(_t.ToolError.execution_failed(str(exc))))
             stream.close()
         else:
@@ -159,8 +172,14 @@ def _make_tool_call_handler(agent: "Agent"):
             stream.push(_t.ToolStreamEvent.complete(content_list))
             stream.close()
 
-        rep = _tool_stream_register(stream)
-        return ResourceHost.own(rep, _TOOL_STREAM_RESOURCE_TYPE_TAG)
+        # Register, then hand ownership to the guest. On failure, drop the rep
+        # ourselves since the guest never received it and won't drop it.
+        rep = registry.register(stream)
+        try:
+            return ResourceHost.own(rep, _TOOL_STREAM_RESOURCE_TYPE_TAG)
+        except BaseException:
+            registry.drop(rep)
+            raise
 
     return call_tool
 
@@ -187,11 +206,13 @@ def _host_log(_store: Any, entry: Any) -> None:
     _GUEST_LOGGER.log(py_level, message, extra={"strands": extra} if extra else None)
 
 
-def _tool_event_stream_read(store: Any, handle: ResourceAny) -> Variant | None:
-    host = handle.to_host(store)
-    rep = host.rep
-    stream = _tool_stream_lookup(rep)
-    return stream.read()
+def _make_tool_event_stream_read(registry: _ToolStreamRegistry):
+    def _tool_event_stream_read(store: Any, handle: ResourceAny) -> Variant | None:
+        host = handle.to_host(store)
+        rep = host.rep
+        stream = registry.lookup(rep)
+        return stream.read()
+    return _tool_event_stream_read
 
 
 def _trap(name: str):
@@ -203,7 +224,7 @@ def _trap(name: str):
 _MODEL_EVENT_STREAM_TYPE_TAG = 0x2
 
 
-def _register_imports(linker: Linker, agent: "Agent") -> None:
+def _register_imports(linker: Linker, agent: Agent, registry: _ToolStreamRegistry) -> None:
     tool_stream_type = _ensure_tool_stream_type()
     # model-provider's host-side stream type. Only reached on custom providers.
     model_event_stream_type = ResourceType.host(_MODEL_EVENT_STREAM_TYPE_TAG)
@@ -213,11 +234,11 @@ def _register_imports(linker: Linker, agent: "Agent") -> None:
             ns.add_func("log", _host_log)
 
         with root.add_instance("strands:agent/tools@0.1.0") as ns:
-            ns.add_resource("tool-event-stream", tool_stream_type, _tool_stream_drop)
-            ns.add_func("[method]tool-event-stream.read", _tool_event_stream_read)
+            ns.add_resource("tool-event-stream", tool_stream_type, lambda _store, rep: registry.drop(rep))
+            ns.add_func("[method]tool-event-stream.read", _make_tool_event_stream_read(registry))
 
         with root.add_instance("strands:agent/tool-provider@0.1.0") as ns:
-            ns.add_func("call-tool", _make_tool_call_handler(agent))
+            ns.add_func("call-tool", _make_tool_call_handler(agent, registry))
 
         # Stubs for the imports the basic Agent.invoke flow never reaches.
         with root.add_instance("strands:agent/model-provider@0.1.0") as ns:
@@ -243,7 +264,9 @@ def _register_imports(linker: Linker, agent: "Agent") -> None:
 
 # --- Store + Linker -----------------------------------------------------
 
-def _make_store_and_linker(agent: "Agent") -> tuple[Store, Linker]:
+def _make_store_and_linker(
+    agent: Agent, registry: _ToolStreamRegistry
+) -> tuple[Store, Linker]:
     engine = _get_engine()
     store = Store(engine)
     wasi = WasiConfig()
@@ -257,7 +280,7 @@ def _make_store_and_linker(agent: "Agent") -> tuple[Store, Linker]:
     linker.allow_shadowing = True
     linker.add_wasip2()
     linker.add_wasi_http_async()
-    _register_imports(linker, agent)
+    _register_imports(linker, agent, registry)
     return store, linker
 
 
@@ -269,12 +292,12 @@ class EventStream:
     while the guest blocks waiting for the next event.
     """
 
-    def __init__(self, runtime: "_AgentRuntime", handle: ResourceAny) -> None:
+    def __init__(self, runtime: _AgentRuntime, handle: ResourceAny) -> None:
         self._runtime = runtime
         self._handle: ResourceAny | None = handle
         self._closed = False
 
-    def __aiter__(self) -> "EventStream":
+    def __aiter__(self) -> EventStream:
         return self
 
     async def __anext__(self) -> Any:
@@ -301,10 +324,11 @@ class _AgentRuntime:
     Callers must await ``async_init`` before invoking any other method.
     """
 
-    def __init__(self, agent: "Agent") -> None:
+    def __init__(self, agent: Agent) -> None:
         self._agent = agent
         self._lock = threading.Lock()
-        self._store, self._linker = _make_store_and_linker(agent)
+        self._tool_streams = _ToolStreamRegistry()
+        self._store, self._linker = _make_store_and_linker(agent, self._tool_streams)
         self._instance = self._linker.instantiate(self._store, _get_component())
         self._funcs = _ApiFuncs(self._store, self._instance)
         self._handle: ResourceAny | None = None

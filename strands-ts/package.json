@@ -123,7 +123,7 @@
     "@ai-sdk/openai": "^3.0.41",
     "@ai-sdk/provider": "^3.0.0",
     "@anthropic-ai/sdk": "^0.92.0",
-    "@aws/bedrock-token-generator": "https://github.com/pgrayy/wasm-deps/releases/download/v44.0.3/aws-bedrock-token-generator-1.1.0.tgz",
+    "@aws/bedrock-token-generator": "^1.1.0",
     "@aws-sdk/client-bedrock": "^3.943.0",
     "@aws-sdk/client-s3": "^3.943.0",
     "@aws-sdk/client-secrets-manager": "^3.943.0",
