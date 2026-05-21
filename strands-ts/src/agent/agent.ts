@@ -457,7 +457,7 @@ export class Agent implements LocalAgent, InvokableAgent {
    * Acquires a lock to prevent concurrent invocations.
    * Returns a Disposable that releases the lock when disposed.
    */
-  private acquireLock(): { [Symbol.dispose]: () => void } {
+  private acquireLock(): Disposable {
     if (this._isInvoking) {
       throw new ConcurrentInvocationError(
         'Agent is already processing an invocation. Wait for the current invoke() or stream() call to complete before invoking again.'
@@ -465,8 +465,9 @@ export class Agent implements LocalAgent, InvokableAgent {
     }
     this._isInvoking = true
 
+    const disposeKey: typeof Symbol.dispose = Symbol.dispose ?? (Symbol.for('Symbol.dispose') as typeof Symbol.dispose)
     return {
-      [Symbol.dispose]: (): void => {
+      [disposeKey]: (): void => {
         this._isInvoking = false
       },
     }

@@ -39,10 +39,8 @@ interface api {
     bool-value(bool),
   }
 
-  /// Single key-value pair attached to every OpenTelemetry span the
-  /// agent emits. The OTEL-typed `attribute-value` distinguishes these
-  /// from `streaming.trace-metadata-entry`, which annotates local
-  /// in-memory trace nodes and only carries strings.
+  /// Key-value pair attached to every OpenTelemetry span the agent emits.
+  /// Distinct from `streaming.trace-metadata-entry`, which is string-only.
   record trace-attribute {
     /// Attribute key.
     key: string,
@@ -50,8 +48,7 @@ interface api {
     value: attribute-value,
   }
 
-  /// W3C Trace Context propagation headers. Links the agent's spans to a
-  /// caller-supplied trace.
+  /// W3C Trace Context headers linking the agent's spans to a caller's trace.
   record trace-context {
     /// `traceparent` header value.
     traceparent: string,
@@ -59,8 +56,7 @@ interface api {
     tracestate: option<string>,
   }
 
-  /// Display-level identity of the agent. All fields are optional and
-  /// fall back to sensible defaults.
+  /// Display-level identity of the agent; all fields default to sensible values.
   record agent-identity {
     /// Display name. Defaults to `"Strands Agent"`.
     name: option<string>,
@@ -71,10 +67,7 @@ interface api {
   }
 
   /// Configuration passed to the `agent` constructor.
-  ///
-  /// Invalid configuration is not reported here (resource constructors
-  /// cannot return `result`); errors surface on the first `generate`
-  /// call as `agent-error::invalid-input`.
+  /// Invalid config surfaces on the first `generate` as `invalid-input`.
   record agent-config {
     /// Model provider. Defaults to Bedrock with a sensible model id when absent.
     model: option<model-config>,
@@ -84,19 +77,15 @@ interface api {
     messages: option<list<message>>,
     /// System prompt. Either plain text or structured content blocks.
     system-prompt: option<prompt-input>,
-    /// Tools available to the model. Per-invocation overrides are possible
-    /// via `invoke-args.tools`.
+    /// Tools available to the model. Overridable per-invocation via `invoke-args.tools`.
     tools: option<list<tool-spec>>,
-    /// Child agents exposed as tools to this agent's model, registered
-    /// alongside `tools`.
+    /// Child agents exposed as tools, registered alongside `tools`.
     agent-tools: option<list<agent-as-tool-config>>,
     /// Built-in tools to enable. Added to `tools`.
     vended-tools: option<list<vended-tool>>,
     /// Built-in plugins to enable.
     vended-plugins: option<list<vended-plugin>>,
-    /// MCP clients whose tools should be exposed to the model. The host
-    /// opens and maintains each connection; the agent loop sees the
-    /// server-advertised tools alongside those in `tools`.
+    /// MCP clients whose tools should be exposed to the model.
     mcp-clients: option<list<mcp-client-config>>,
     /// Display-level identity (name, id, description).
     identity: option<agent-identity>,
@@ -106,25 +95,19 @@ interface api {
     display-output: option<bool>,
     /// Attributes added to every OpenTelemetry span.
     trace-attributes: option<list<trace-attribute>>,
-    /// W3C Trace Context linking the agent's spans to a caller-supplied
-    /// trace.
+    /// W3C Trace Context linking the agent's spans to a caller-supplied trace.
     trace-context: option<trace-context>,
     /// Session persistence. Absent means no persistence.
     session: option<session-config>,
-    /// Conversation history management. Absent applies a sliding-window
-    /// default.
+    /// Conversation history management. Defaults to a sliding window.
     conversation-manager: option<conversation-manager-config>,
-    /// Retry policy for failed model calls. Absent applies an exponential
-    /// backoff default capped at 6 attempts.
+    /// Retry policy for failed model calls. Defaults to exponential backoff capped at 6 attempts.
     retry: option<retry-config>,
-    /// JSON Schema for structured output validation. Shape is user-defined
-    /// and therefore opaque on the wire.
+    /// JSON Schema for structured output. Opaque on the wire.
     structured-output-schema: option<string>,
-    /// Initial app-state values as an opaque JSON object. The agent does
-    /// not interpret this.
+    /// Initial app-state values as an opaque JSON object.
     app-state: option<string>,
-    /// Initial model-provider state as an opaque JSON object. Typically
-    /// only set when hydrating from a snapshot.
+    /// Initial model-provider state as an opaque JSON object. Set when hydrating from a snapshot.
     model-state: option<string>,
   }
 
@@ -142,11 +125,9 @@ interface api {
 
   /// Payload supplied when resuming from a human-in-the-loop interrupt.
   record respond-args {
-    /// Id of the interrupt being responded to. Matches the id from the
-    /// `interrupt` stream event.
+    /// Id of the interrupt being responded to; matches the `interrupt` stream event.
     interrupt-id: string,
-    /// User's response as a JSON value. Shape is interrupt-specific and
-    /// therefore opaque on the wire.
+    /// User's response as a JSON value. Opaque on the wire.
     response: string,
   }
 
@@ -164,8 +145,7 @@ interface api {
     internal(string),
   }
 
-  /// An agent instance. Persistent across `generate` calls, carrying
-  /// conversation state and registered tools.
+  /// An agent instance. Persistent across `generate` calls.
   resource agent {
     /// Construct an agent from config.
     constructor(config: agent-config);
@@ -183,9 +163,7 @@ interface api {
     get-model-state: func() -> string;
     /// Replace model-provider state. Input is an opaque JSON object.
     set-model-state: func(json: string) -> result<_, agent-error>;
-    /// Fetch all in-memory traces collected this lifetime. Traces form a
-    /// tree linked by `parent-id`; the list is returned flat because WIT
-    /// does not permit recursive records.
+    /// Fetch in-memory traces. Returned flat since WIT lacks recursive records; reconstruct via `parent-id`.
     get-traces: func() -> list<agent-trace>;
     /// Fetch a snapshot of the current metrics totals.
     get-metrics: func() -> agent-metrics;
@@ -197,41 +175,39 @@ interface api {
     delete-session: func() -> result<_, agent-error>;
   }
 
-  /// Handle to an in-flight `generate` invocation. Call `events` once to
-  /// get the event stream and drain it to completion; use `respond` and
-  /// `cancel` out-of-band to drive human-in-the-loop and cancellation.
+  /// Pull-based stream of agent events; sync-WIT placeholder for `stream<stream-event>`.
+  resource event-stream {
+    /// Pull the next event. `none` once the stream terminates.
+    read: func() -> option<stream-event>;
+  }
+
+  /// Handle to an in-flight `generate` invocation.
   resource response-stream {
-    /// Async stream of events produced during the invocation. Iterate
-    /// with your language's native async stream consumer.
-    events: func() -> stream<stream-event>;
+    /// Stream of events produced during the invocation.
+    events: func() -> event-stream;
     /// Resume a human-in-the-loop interrupt with the user's response.
     respond: func(args: respond-args) -> result<_, agent-error>;
-    /// Cancel the invocation, aborting any in-flight work. Fire-and-forget.
+    /// Cancel the invocation. Fire-and-forget.
     cancel: func();
   }
 }
 
-/// Strands agent component. Your application implements the imported
-/// interfaces to plug in custom tools, storage, models, and other
-/// extension points; the agent API is ready to call.
+/// Strands agent component. Implement the imports to plug in custom tools,
+/// storage, models, and other extension points; the API is ready to call.
 world agent {
-  /// Tools your application exposes to the agent's model.
+  /// Tools the application exposes to the agent's model.
   import tool-provider;
   /// Receives structured log entries from the agent.
   import host-log;
-  /// Custom session snapshot storage. Selected by setting
-  /// `session-config.storage` to `custom`.
+  /// Custom snapshot storage. Selected via `session-config.storage = custom`.
   import snapshot-storage;
-  /// Custom policy deciding when to take session snapshots. Selected by
-  /// setting `session-config.save-latest` to the `trigger(id)` variant.
+  /// Custom snapshot policy. Selected via `session-config.save-latest = trigger(id)`.
   import snapshot-trigger-handler;
-  /// Custom model provider implementation. Selected via
-  /// `model-config.custom`.
+  /// Custom model provider. Selected via `model-config.custom`.
   import model-provider;
   /// Conditional graph-edge callbacks for multi-agent orchestration.
   import edge-handler-registry;
-  /// Responds to MCP elicitation requests. Enabled per client via
-  /// `mcp-client-config.elicitation-enabled`.
+  /// Responds to MCP elicitation. Enabled per client via `mcp-client-config.elicitation-enabled`.
   import elicitation-handler;
   /// Agent API your application calls.
   export api;

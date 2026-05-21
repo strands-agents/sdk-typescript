@@ -56,9 +56,7 @@ interface streaming {
     value: string,
   }
 
-  /// In-memory trace node collected during an invocation. Traces form a
-  /// tree linked by `parent-id`. Reconstruct the tree by grouping on
-  /// that field.
+  /// In-memory trace node. Returned flat; reconstruct the tree via `parent-id`.
   record agent-trace {
     /// Unique identifier.
     id: string,
@@ -135,9 +133,7 @@ interface streaming {
     projected-context-size: option<s32>,
   }
 
-  /// Mutable tool-use descriptor carried on tool-call hook events. Matches
-  /// the shape of the tool-use block the model emitted; `before-tool-call`
-  /// hooks may rewrite fields before execution.
+  /// Mutable tool-use descriptor. `before-tool-call` hooks may rewrite fields.
   record tool-use-data {
     /// Tool to invoke.
     name: string,
@@ -149,21 +145,17 @@ interface streaming {
 
   /// Redaction information when guardrails block content.
   record hook-redaction {
-    /// Text the user message should be replaced with when input was
-    /// redacted. The redacted message itself is in the conversation
-    /// history.
+    /// Replacement text for the redacted user message; the original is in history.
     user-message: string,
   }
 
-  /// Response from a model invocation containing the message and stop
-  /// reason, surfaced on `after-model-call`.
+  /// Model response surfaced on `after-model-call`.
   record model-stop-data {
     /// Message returned by the model.
     message: message,
     /// Why the model stopped generating.
     stop-reason: stop-reason,
-    /// Redaction info when guardrails blocked input. Absent when no
-    /// redaction happened.
+    /// Redaction info when guardrails blocked input. Absent if no redaction.
     redaction: option<hook-redaction>,
   }
 
@@ -264,26 +256,21 @@ interface streaming {
     stop: stop-event,
   }
 
-  /// Input content redaction emitted when a guardrail blocks input.
-  /// The original input is still available in the conversation history,
-  /// so only the replacement is carried here.
+  /// Input redaction emitted when a guardrail blocks input. Original is in history.
   record input-redaction {
-    /// Text to substitute in for the blocked input.
+    /// Text to substitute for the blocked input.
     replace-content: string,
   }
 
-  /// Output content redaction emitted when a guardrail blocks output.
+  /// Output redaction emitted when a guardrail blocks output.
   record output-redaction {
-    /// Original blocked content, when the provider surfaced it. Some
-    /// providers deliver the redaction without the original text.
+    /// Original blocked content if the provider surfaced it.
     redacted-content: option<string>,
-    /// Text to substitute in for the blocked output.
+    /// Text to substitute for the blocked output.
     replace-content: string,
   }
 
-  /// Redaction event emitted when a guardrail blocks content. Input and
-  /// output redactions are independent fields. At least one is always
-  /// present in practice; both may be present at once.
+  /// Redaction event. Input and output fields are independent; at least one is set.
   record redaction-event {
     /// Present when input was redacted.
     input-redaction: option<input-redaction>,
@@ -323,15 +310,9 @@ interface streaming {
   }
 
   /// Events yielded during agent streaming.
-  ///
-  /// The `text-delta`, `tool-use`, and `tool-result` arms are hot-path
-  /// events emitted at interactive rates. Everything else (reasoning,
-  /// images, video, documents, citations, cache points, guard content)
-  /// flows through `content`, carrying a fully-typed `content-block`.
-  ///
-  /// Lifecycle arms (`before-invocation` through `agent-result`) expose
-  /// the same points a hook system would subscribe to. Callers filter
-  /// the event stream on the arm tag to implement hook-like behavior.
+  /// Hot-path arms: `text-delta`, `tool-use`, `tool-result`. Other content
+  /// blocks flow through `content`. Lifecycle arms (`before-invocation`
+  /// through `agent-result`) mirror a hook system and can be filtered by tag.
   variant stream-event {
     /// Incremental text from the model.
     text-delta(string),
@@ -349,9 +330,7 @@ interface streaming {
     redaction(redaction-event),
     /// Recoverable error surfaced mid-stream.
     error(stream-error),
-    /// Human-in-the-loop pause. The invocation halts until the caller
-    /// resumes with a matching `interrupt-response` via
-    /// `response-stream.respond`.
+    /// Human-in-the-loop pause; resume via `response-stream.respond`.
     interrupt(interrupt),
     /// Agent finished construction.
     initialized,

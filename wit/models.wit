@@ -57,9 +57,7 @@ interface models {
     model-id: option<string>,
     /// Implementation-specific overrides as a JSON object.
     additional-config: option<string>,
-    /// Whether this provider manages conversation state server-side.
-    /// Stateful providers receive only the latest message per call and
-    /// the agent's local history is cleared after each invocation.
+    /// Stateful providers see only the latest message; local history clears each call.
     stateful: bool,
   }
 
@@ -112,18 +110,19 @@ interface models {
   }
 }
 
-/// Pluggable model provider. Implement this interface to wire a custom
-/// model (internal endpoint, alternative vendor, test double) into the
-/// agent loop.
-///
-/// Selected via `model-config.custom` in `agent-config`. The `provider-id`
-/// from the config is passed on every call so one implementation can
-/// serve multiple providers.
+/// Pluggable model provider. Selected via `model-config.custom`.
+/// `provider-id` is passed on every call so one impl can serve many providers.
 interface model-provider {
   use models.{model-error};
   use messages.{message, prompt-input};
   use tools.{tool-spec, tool-choice};
   use streaming.{stream-event};
+
+  /// Pull-based stream of model events from a custom provider; host produces, guest reads.
+  resource model-event-stream {
+    /// Pull the next event. `none` once the stream terminates.
+    read: func() -> option<stream-event>;
+  }
 
   /// Options passed alongside the messages on each streaming call.
   record model-stream-options {
@@ -159,7 +158,7 @@ interface model-provider {
 
   /// Start a streaming generation. Return an async stream; cancellation
   /// is signalled by the caller dropping the reader.
-  start-stream: func(args: start-stream-args) -> stream<stream-event>;
+  start-stream: func(args: start-stream-args) -> model-event-stream;
 
   /// Count tokens for the given input, for proactive context management.
   count-tokens: func(args: count-tokens-args) -> result<s32, model-error>;

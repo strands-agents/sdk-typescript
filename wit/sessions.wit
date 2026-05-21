@@ -115,13 +115,9 @@ interface sessions {
     elapsed-ms: s64,
   }
 
-  /// Named piece of plugin state. Plugins identify themselves by
-  /// `plugin-name`; `data` is an opaque JSON object specific to that
-  /// plugin. Used for user-authored plugins and for vended plugins whose
-  /// state isn't modeled explicitly elsewhere.
+  /// Named plugin state. `data` is an opaque JSON object owned by the plugin.
   record plugin-state-entry {
-    /// Plugin identifier, matching the `name` field of the plugin's
-    /// implementation.
+    /// Plugin identifier, matches the plugin's `name`.
     plugin-name: string,
     /// Plugin-owned state as an opaque JSON object.
     data: string,
@@ -187,13 +183,8 @@ interface sessions {
   }
 }
 
-/// Pluggable snapshot storage. Implement this interface to back sessions
-/// with a backend other than the built-in file or S3 options (for
-/// example, a relational database or bespoke object store).
-///
-/// Selected by setting `storage-config` to `custom(custom-storage-config)`.
-/// Each call carries the `backend-id` so one implementation can serve
-/// multiple backends.
+/// Pluggable snapshot storage. Selected via `storage-config = custom(...)`.
+/// `backend-id` is passed on every call so one impl can serve many backends.
 interface snapshot-storage {
   use sessions.{snapshot, snapshot-location, snapshot-manifest, storage-error};
 
@@ -278,10 +269,8 @@ interface snapshot-storage {
   save-manifest: func(args: save-manifest-args) -> result<_, storage-error>;
 }
 
-/// Pluggable snapshot trigger. `should-snapshot` is called after each
-/// agent invocation to decide whether to write a new immutable snapshot.
-/// Enabled by setting `session-config.save-latest` to the `trigger(id)`
-/// arm.
+/// Pluggable snapshot trigger called after each invocation.
+/// Enabled via `session-config.save-latest = trigger(id)`.
 interface snapshot-trigger-handler {
   use messages.{message};
 

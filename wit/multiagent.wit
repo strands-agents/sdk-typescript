@@ -224,9 +224,7 @@ interface multi-agent {
   }
 }
 
-/// Pluggable edge-handler registry. Implement this interface to supply
-/// custom routing callbacks for graph edges whose condition cannot be
-/// expressed as static data.
+/// Pluggable edge-handler registry for graph edges that need custom routing.
 interface edge-handler-registry {
   use multi-agent.{node-result};
 

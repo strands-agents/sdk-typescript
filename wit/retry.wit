@@ -54,31 +54,21 @@ interface retry {
     exponential(exponential-backoff-config),
   }
 
-  /// A single retry strategy for model calls.
-  ///
-  /// Defaults approximate the TS `DefaultModelRetryStrategy`: exponential
-  /// backoff with full jitter, capped at 6 attempts.
+  /// A single retry strategy. Default is exponential backoff, full jitter, 6 attempts.
   record model-retry-strategy {
     /// Maximum number of attempts, including the initial call.
     max-attempts: s32,
     /// Backoff curve applied between attempts.
     backoff: backoff-strategy,
-    /// Upper bound on total retry window. Once exceeded, further retries
-    /// are abandoned. Absent means no cap.
+    /// Upper bound on total retry window. Absent means no cap.
     total-budget: option<duration>,
   }
 
   /// Retry configuration attached to an agent.
-  ///
-  /// Strategies compose: every strategy observes every failure, and a
-  /// retry is attempted if any strategy requests one. The first strategy
-  /// to request a delay wins. Registration order does not affect
-  /// correctness. Supplying two strategies with the same `backoff` arm
-  /// is almost certainly a mistake and may surface as
-  /// `agent-error::invalid-input`.
-  ///
-  /// An empty list disables retries; omitting the config from
-  /// `agent-config.retry` applies a default single `exponential` strategy.
+  /// Every strategy observes every failure; the first to request a delay wins.
+  /// Empty list disables retries; omitting `agent-config.retry` applies a default
+  /// single exponential strategy. Two strategies with the same `backoff` arm
+  /// surface as `agent-error::invalid-input`.
   record retry-config {
     /// Strategies evaluated on every retryable failure.
     strategies: list<model-retry-strategy>,
