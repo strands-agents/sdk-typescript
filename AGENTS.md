@@ -196,6 +196,7 @@ sdk-typescript/
 │   │   ├── index.ts              # Main SDK entry point
 │   │   ├── interrupt.ts          # Interrupt handling
 │   │   ├── mcp.ts                # MCP client implementation
+│   │   ├── mcp-config.ts         # MCP config file parsing
 │   │   ├── mime.ts               # MIME type utilities
 │   │   └── state-store.ts        # State store implementation
 │   │

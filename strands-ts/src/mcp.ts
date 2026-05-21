@@ -16,6 +16,7 @@ import type { JSONSchema, JSONValue } from './types/json.js'
 import type { ElicitationCallback } from './types/elicitation.js'
 import { McpTool } from './tools/mcp-tool.js'
 import { logger } from './logging/index.js'
+import { type McpServerConfig, resolveServerConfigs } from './mcp-config.js'
 
 /**
  * Widened transport type that accepts MCP transport implementations without requiring explicit casts.
@@ -74,23 +75,8 @@ export interface McpClientCredentials {
   scopes?: string[]
 }
 
-/** Arguments for configuring an MCP Client. */
-export type McpClientConfig = RuntimeConfig & {
-  /** Pre-constructed transport. Mutually exclusive with `url`. */
-  transport?: McpTransport
-
-  /** Server URL. When provided, a StreamableHTTP transport is constructed automatically. */
-  url?: string | URL
-
-  /** Client credentials for OAuth machine-to-machine auth. Requires `url`. */
-  auth?: McpClientCredentials
-
-  /** Custom OAuth provider for advanced auth flows. Requires `url`. Mutually exclusive with `auth`. */
-  authProvider?: OAuthClientProvider
-
-  /** Custom headers to include on every request to the server. Requires `url`. */
-  headers?: Record<string, string>
-
+/** Behavioral options shared by all MCP client configurations. */
+export interface McpClientOptions extends RuntimeConfig {
   /** Disable OpenTelemetry MCP instrumentation. */
   disableMcpInstrumentation?: boolean
 
@@ -109,10 +95,28 @@ export type McpClientConfig = RuntimeConfig & {
   elicitationCallback?: ElicitationCallback
 
   /** When true, connection failures are logged as warnings instead of throwing. */
-  failOpen?: boolean
+  continueOnError?: boolean
 
   /** Called when the server emits a log message. Defaults to routing through the Strands logger. */
   logHandler?: (params: LoggingMessageNotificationParams) => void
+}
+
+/** Arguments for configuring an MCP Client. */
+export type McpClientConfig = McpClientOptions & {
+  /** Pre-constructed transport. Mutually exclusive with `url`. */
+  transport?: McpTransport
+
+  /** Server URL. When provided, a StreamableHTTP transport is constructed automatically. */
+  url?: string | URL
+
+  /** Client credentials for OAuth machine-to-machine auth. Requires `url`. */
+  auth?: McpClientCredentials
+
+  /** Custom OAuth provider for advanced auth flows. Requires `url`. Mutually exclusive with `auth`. */
+  authProvider?: OAuthClientProvider
+
+  /** Custom headers to include on every request to the server. Requires `url`. */
+  headers?: Record<string, string>
 }
 
 /** MCP Client for interacting with Model Context Protocol servers. */
@@ -123,12 +127,26 @@ export class McpClient {
   /** Default poll timeout for task completion in milliseconds (5 minutes). */
   public static readonly DEFAULT_POLL_TIMEOUT = 300000
 
+  /**
+   * Parses an MCP servers config (file path or object) and returns McpClient instances.
+   *
+   * @param config - A file path to a JSON config, or a flat server map object.
+   * @param defaults - Options applied to all clients unless overridden per-server.
+   * @returns An array of McpClient instances ready to be passed to an Agent.
+   */
+  public static async loadServers(
+    config: string | Record<string, McpServerConfig>,
+    defaults?: McpClientOptions
+  ): Promise<McpClient[]> {
+    return (await resolveServerConfigs(config, defaults)).map((c) => new McpClient(c))
+  }
+
   private _clientName: string
   private _clientVersion: string
   private _transport: Transport
   private _state: McpConnectionState
   private _client: Client
-  private _failOpen: boolean
+  private _continueOnError: boolean
   private _logHandler: (params: LoggingMessageNotificationParams) => void
   private _disableMcpInstrumentation: boolean
   private _tasksConfig: TasksConfig | undefined
@@ -143,7 +161,7 @@ export class McpClient {
     this._clientVersion = args.applicationVersion || '0.0.1'
     this._transport = McpClient._resolveTransport(args)
     this._state = 'disconnected'
-    this._failOpen = args.failOpen ?? false
+    this._continueOnError = args.continueOnError ?? false
     this._logHandler = args.logHandler ?? defaultLogHandler
     this._tasksConfig = args.tasksConfig
     this._elicitationCallback = args.elicitationCallback
@@ -201,12 +219,10 @@ export class McpClient {
       : args.authProvider
 
     const url = args.url instanceof URL ? args.url : new URL(args.url!)
-    return new StreamableHTTPClientTransport(
-      url,
-      authProvider || args.headers
-        ? { ...(authProvider && { authProvider }), ...(args.headers && { requestInit: { headers: args.headers } }) }
-        : undefined
-    ) as Transport
+    return new StreamableHTTPClientTransport(url, {
+      ...(authProvider && { authProvider }),
+      ...(args.headers && { requestInit: { headers: args.headers } }),
+    }) as Transport
   }
 
   get client(): Client {
@@ -229,10 +245,18 @@ export class McpClient {
     return this._state
   }
 
+  get clientName(): string {
+    return this._clientName
+  }
+
+  get continueOnError(): boolean {
+    return this._continueOnError
+  }
+
   /**
    * Connects the MCP client to the server.
    *
-   * Called lazily before any operation that requires a connection. When `failOpen` is true,
+   * Called lazily before any operation that requires a connection. When `continueOnError` is true,
    * connection failures are swallowed and the client enters a `'failed'` state — subsequent
    * calls are no-ops until `connect(true)` is called explicitly to retry.
    *
@@ -258,10 +282,10 @@ export class McpClient {
       await this._client.connect(this._transport)
       this._state = 'connected'
     } catch (error) {
-      if (!this._failOpen) throw error
+      if (!this._continueOnError) throw error
       this._state = 'failed'
       logger.warn(
-        `client=<${this._clientName}>, error=<${error}> | MCP server failed to connect, continuing with failOpen`
+        `client=<${this._clientName}>, error=<${error}> | MCP server failed to connect, continuing (continueOnError)`
       )
     }
   }
