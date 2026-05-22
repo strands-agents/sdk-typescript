@@ -302,6 +302,24 @@ describe('programmatic_tool_caller tool', () => {
       expect(getText(result)).toBe(['function', 'function'].join('\n'))
     })
 
+    it('normalizes module names with non-identifier chars (fs/promises -> fs_promises)', async () => {
+      // `fs/promises` would otherwise crash `new AsyncFunction('fs/promises', ...)`
+      // with `SyntaxError: Arg string terminates parameters early`, since `/`
+      // is not a valid character in a JS identifier. We normalize to
+      // `fs_promises` before injection.
+      vi.stubEnv('PROGRAMMATIC_TOOL_CALLER_EXTRA_MODULES', 'fs/promises')
+      const agent = makeAgent()
+      const result = await runCode(
+        agent,
+        `
+          console.log(typeof fs_promises)
+          console.log(typeof fs_promises.readFile)
+        `
+      )
+      expect(result.status).toBe('success')
+      expect(getText(result)).toBe(['object', 'function'].join('\n'))
+    })
+
     it('skips and warns on disallowed extra modules without exposing them', async () => {
       vi.stubEnv('PROGRAMMATIC_TOOL_CALLER_EXTRA_MODULES', 'child_process')
       const agent = makeAgent()

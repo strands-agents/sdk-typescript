@@ -27,6 +27,21 @@ const programmaticToolCallerInputSchema = z.object({
 const VALID_JS_IDENTIFIER = /^[A-Za-z_$][A-Za-z0-9_$]*$/
 
 /**
+ * Normalize a module name into a valid JavaScript identifier suitable for use
+ * as an `AsyncFunction` parameter name. Non-identifier characters (e.g. `/`
+ * in `fs/promises`) are replaced with `_`. This mirrors how the namespace
+ * binding will be visible inside the user's code (e.g. `fs/promises`
+ * imports become `fs_promises` bindings).
+ *
+ * Required because `new AsyncFunction(...names, code)` rejects parameter
+ * names that aren't valid JS identifiers — `fs/promises` would raise
+ * `SyntaxError: Arg string terminates parameters early`.
+ */
+function moduleNameToIdentifier(name: string): string {
+  return name.replace(/[^A-Za-z0-9_$]/g, '_')
+}
+
+/**
  * Reads `PROGRAMMATIC_TOOL_CALLER_ALLOWED_TOOLS` and returns the resolved
  * allow-list of tool names actually present in the registry, with the
  * `programmatic_tool_caller` tool itself always excluded.
@@ -84,7 +99,8 @@ async function loadExtraModules(): Promise<Record<string, unknown>> {
       // ESM dynamic import of a CJS Node built-in returns a namespace whose
       // `default` is the module's primary export. Prefer it when present,
       // mirroring the developer expectation of `require('fs')`.
-      result[name] = 'default' in mod && mod.default !== undefined ? mod.default : mod
+      const identifier = moduleNameToIdentifier(name)
+      result[identifier] = 'default' in mod && mod.default !== undefined ? mod.default : mod
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err)
       logger.warn(`module=<${name}>, error=<${message}> | failed to import extra module, skipping`)
