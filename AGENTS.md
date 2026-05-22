@@ -190,7 +190,8 @@ sdk-typescript/
 │   │   │   ├── bash/
 │   │   │   ├── file-editor/
 │   │   │   ├── http-request/
-│   │   │   └── notebook/
+│   │   │   ├── notebook/
+│   │   │   └── programmatic-tool-caller/
 │   │   │
 │   │   ├── errors.ts             # Custom error classes
 │   │   ├── index.ts              # Main SDK entry point
@@ -339,7 +340,7 @@ sdk-typescript/
 - **`strands-ts/src/tools/`**: Tool definitions, types, and structured output validation with Zod schemas
 - **`strands-ts/src/types/`**: Core type definitions used across the SDK
 - **`strands-ts/src/vended-plugins/`**: Optional vended plugins (context-offloader, skills — not part of core SDK, independently importable)
-- **`strands-ts/src/vended-tools/`**: Optional vended tools (bash, file-editor, http-request, notebook)
+- **`strands-ts/src/vended-tools/`**: Optional vended tools (bash, file-editor, http-request, notebook, programmatic-tool-caller)
 - **`strands-ts/generated/`**: Auto-generated WIT interface type declarations
 - **`strands-ts/test/integ/`**: Integration tests (tests public API and external integrations)
 - **`strands-ts/examples/`**: Example applications
