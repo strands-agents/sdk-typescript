@@ -12,6 +12,8 @@ import { logger } from '../../logging/logger.js'
 import type { JSONValue } from '../../types/json.js'
 import type { Storage } from './storage.js'
 import { isSearchableContent, searchContent } from './search.js'
+import { SandboxStorage } from './storage.js'
+import { Sandbox } from '../../sandbox/base.js'
 
 const CHARS_PER_TOKEN = 4
 const DEFAULT_MAX_RESULT_TOKENS = 2_500
@@ -103,8 +105,8 @@ function decodeStoredContent(content: Uint8Array, contentType: string, reference
 
 /** Configuration for the {@link ContextOffloader} plugin. */
 export interface ContextOffloaderConfig {
-  /** Storage backend for persisting offloaded content. */
-  storage: Storage
+  /** Storage backend for persisting offloaded content. Pass a Sandbox instance to store in the sandbox filesystem. */
+  storage: Storage | Sandbox
   /** Token threshold above which tool results are offloaded. Defaults to 2,500. */
   maxResultTokens?: number
   /** Number of tokens to keep as an inline preview. Defaults to 1,000. */
@@ -147,7 +149,7 @@ export class ContextOffloader implements Plugin {
     if (previewTokens < 0) throw new Error('previewTokens must be non-negative')
     if (previewTokens >= maxResultTokens) throw new Error('previewTokens must be less than maxResultTokens')
 
-    this._storage = config.storage
+    this._storage = config.storage instanceof Sandbox ? new SandboxStorage(config.storage) : config.storage
     this._maxResultTokens = maxResultTokens
     this._previewTokens = previewTokens
     this._includeRetrievalTool = config.includeRetrievalTool ?? true

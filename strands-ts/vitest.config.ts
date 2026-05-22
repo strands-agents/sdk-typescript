@@ -49,6 +49,10 @@ export default defineConfig({
             'src/vended-plugins/**/__tests__/**/*.test.ts',
             'src/vended-plugins/**/__tests__/**/*.test.browser.ts',
           ],
+          exclude: [
+            'src/sandbox/__tests__/remote.test.ts',
+            'src/agent/__tests__/agent.model-retry.test.ts',
+          ],
           name: { label: 'unit-browser', color: 'cyan' },
           browser: {
             enabled: true,

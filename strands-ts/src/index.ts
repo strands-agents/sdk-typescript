@@ -300,6 +300,17 @@ export { AgentTrace } from './telemetry/tracer.js'
 // Local Metrics
 export { AgentMetrics } from './telemetry/meter.js'
 
+// Sandbox (base class and types only — Node-specific implementations available via './sandbox' sub-export)
+export { Sandbox, type ExecuteOptions } from './sandbox/base.js'
+export type {
+  StreamType,
+  StreamChunk,
+  FileInfo,
+  OutputFile,
+  ExecutionResult,
+  SandboxSnapshot,
+} from './sandbox/types.js'
+
 // Multi-agent orchestration
 export { Graph } from './multiagent/index.js'
 export { Swarm } from './multiagent/index.js'

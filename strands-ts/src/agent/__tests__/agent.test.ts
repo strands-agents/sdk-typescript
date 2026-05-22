@@ -907,7 +907,7 @@ describe('Agent', () => {
         await agent.invoke('First prompt')
         expect(agent.systemPrompt).toEqual([new TextBlock('You are a helpful assistant')])
 
-        // Should have been called with the given promp
+        // Should have been called with the given prompt and no tools (no sandbox configured)
         expect(streamSpy).toHaveBeenCalledWith(
           expect.any(Array),
           expect.objectContaining({

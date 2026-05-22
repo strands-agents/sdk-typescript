@@ -1,0 +1,167 @@
+/**
+ * Shared utility for streaming stdout/stderr from a child process.
+ *
+ * Used by all sandbox backends that spawn a ChildProcess.
+ */
+
+import type { ChildProcess } from 'child_process'
+import type { ExecutionResult, StreamChunk } from './types.js'
+
+const SIGNAL_CODES: Record<string, number> = {
+  SIGHUP: 1,
+  SIGINT: 2,
+  SIGQUIT: 3,
+  SIGABRT: 6,
+  SIGKILL: 9,
+  SIGSEGV: 11,
+  SIGPIPE: 13,
+  SIGTERM: 15,
+}
+
+export interface StreamProcessOptions {
+  timeout?: number | undefined
+  signal?: AbortSignal | undefined
+  enoentMessage?: string | undefined
+}
+
+/**
+ * Stream stdout/stderr from a child process, then yield the final result.
+ *
+ * Bridges Node.js event emitters to an async generator. Chunks are
+ * yielded incrementally as the process produces output. The final
+ * yield is an ExecutionResult with the exit code and complete output.
+ *
+ * All listeners are attached synchronously before any await to prevent
+ * missed events from fast-completing processes.
+ */
+export async function* streamProcess(
+  proc: ChildProcess,
+  options?: StreamProcessOptions
+): AsyncGenerator<StreamChunk | ExecutionResult, void, undefined> {
+  const chunks: StreamChunk[] = []
+  let stdout = ''
+  let stderr = ''
+  let done = false
+  let terminating = false
+  let exitCode = 0
+  let error: Error | undefined
+  let enoent = false
+  let resolveWait: (() => void) | undefined
+  let timeoutHandle: ReturnType<typeof setTimeout> | undefined
+
+  const wake = (): void => {
+    if (resolveWait) {
+      resolveWait()
+      resolveWait = undefined
+    }
+  }
+
+  const terminate = (reason: Error): void => {
+    if (terminating || done) return
+    terminating = true
+    error = reason
+    proc.kill('SIGTERM')
+    wake()
+    setTimeout(() => {
+      if (!done) proc.kill('SIGKILL')
+    }, 1000)
+  }
+
+  proc.stdout?.on('data', (data) => {
+    const text = String(data)
+    stdout += text
+    chunks.push({ type: 'streamChunk', data: text, streamType: 'stdout' })
+    wake()
+  })
+
+  proc.stderr?.on('data', (data) => {
+    const text = String(data)
+    stderr += text
+    chunks.push({ type: 'streamChunk', data: text, streamType: 'stderr' })
+    wake()
+  })
+
+  proc.on('close', (code, signal) => {
+    if (!done) {
+      if (code !== null) {
+        exitCode = code
+      } else if (signal) {
+        exitCode = 128 + (SIGNAL_CODES[signal] ?? 1)
+      } else {
+        exitCode = 1
+      }
+      done = true
+      wake()
+    }
+  })
+
+  proc.on('error', (err) => {
+    if (!done) {
+      if (options?.enoentMessage && 'code' in err && err.code === 'ENOENT') {
+        enoent = true
+      } else {
+        error = err
+      }
+      done = true
+      wake()
+    }
+  })
+
+  const onAbort = (): void => terminate(new Error('Execution aborted'))
+
+  if (options?.signal) {
+    if (options.signal.aborted) {
+      onAbort()
+    } else {
+      options.signal.addEventListener('abort', onAbort, { once: true })
+    }
+  }
+
+  if (options?.timeout !== undefined) {
+    timeoutHandle = setTimeout(() => {
+      terminate(new Error(`Execution timed out after ${options.timeout} seconds`))
+    }, options.timeout * 1000)
+  }
+
+  try {
+    while (true) {
+      if (chunks.length > 0) {
+        const batch = chunks.splice(0, chunks.length)
+        for (const chunk of batch) {
+          yield chunk
+        }
+      }
+
+      if (done || terminating) break
+
+      await new Promise<void>((resolve) => {
+        resolveWait = resolve
+      })
+    }
+
+    if (enoent) {
+      yield {
+        type: 'executionResult',
+        exitCode: 127,
+        stdout: '',
+        stderr: options!.enoentMessage!,
+        outputFiles: [],
+      } satisfies ExecutionResult
+      return
+    }
+
+    if (error) throw error
+
+    yield {
+      type: 'executionResult',
+      exitCode,
+      stdout,
+      stderr,
+      outputFiles: [],
+    } satisfies ExecutionResult
+  } finally {
+    if (timeoutHandle !== undefined) clearTimeout(timeoutHandle)
+    if (options?.signal) options.signal.removeEventListener('abort', onAbort)
+    if (!done) proc.kill()
+  }
+}

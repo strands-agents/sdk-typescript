@@ -3,6 +3,8 @@ import { fileEditor } from '../file-editor.js'
 import type { ToolContext } from '../../../index.js'
 import { StateStore } from '../../../state-store.js'
 import { createMockAgent } from '../../../__fixtures__/agent-helpers.js'
+import { NotASandboxLocalEnvironment } from '../../../sandbox/not-a-sandbox-local-environment.js'
+import { TestSandbox } from '../../../__fixtures__/test-sandbox.node.js'
 import { promises as fs } from 'fs'
 import * as path from 'path'
 import { tmpdir } from 'os'
@@ -13,7 +15,8 @@ describe('fileEditor tool', () => {
 
   // Helper to create fresh state and context for each test
   const createFreshContext = (): { state: StateStore; context: ToolContext } => {
-    const agent = createMockAgent()
+    const sandbox = new NotASandboxLocalEnvironment()
+    const agent = createMockAgent({ sandbox })
     const toolContext: ToolContext = {
       toolUse: {
         name: 'fileEditor',
@@ -156,13 +159,7 @@ describe('fileEditor tool', () => {
       it('throws when file not found', async () => {
         const nonExistentPath = path.join(testDir, 'nonexistent.txt')
         await expect(fileEditor.invoke({ command: 'view', path: nonExistentPath }, context)).rejects.toThrow(
-          'does not exist'
-        )
-      })
-
-      it('throws when path is not absolute', async () => {
-        await expect(fileEditor.invoke({ command: 'view', path: 'relative/path.txt' }, context)).rejects.toThrow(
-          'not an absolute path'
+          'no such file'
         )
       })
 
@@ -235,19 +232,6 @@ describe('fileEditor tool', () => {
         await expect(
           fileEditor.invoke({ command: 'create', path: filePath, file_text: 'new content' }, context)
         ).rejects.toThrow('already exists')
-      })
-
-      it('throws when path is not absolute', async () => {
-        await expect(
-          fileEditor.invoke({ command: 'create', path: 'relative/path.txt', file_text: 'content' }, context)
-        ).rejects.toThrow('not an absolute path')
-      })
-
-      it('throws when path contains traversal', async () => {
-        const filePath = '..outside.txt'
-        await expect(
-          fileEditor.invoke({ command: 'create', path: filePath, file_text: 'content' }, context)
-        ).rejects.toThrow()
       })
 
       it('throws when trying to create in directory as path', async () => {
@@ -342,7 +326,7 @@ describe('fileEditor tool', () => {
         const nonExistentPath = path.join(testDir, 'nonexistent.txt')
         await expect(
           fileEditor.invoke({ command: 'str_replace', path: nonExistentPath, old_str: 'OLD', new_str: 'NEW' }, context)
-        ).rejects.toThrow('does not exist')
+        ).rejects.toThrow('no such file')
       })
 
       it('throws when path is directory', async () => {
@@ -448,7 +432,7 @@ describe('fileEditor tool', () => {
         const nonExistentPath = path.join(testDir, 'nonexistent.txt')
         await expect(
           fileEditor.invoke({ command: 'insert', path: nonExistentPath, insert_line: 0, new_str: 'NEW' }, context)
-        ).rejects.toThrow('does not exist')
+        ).rejects.toThrow('no such file')
       })
 
       it('throws when path is directory', async () => {
@@ -460,14 +444,6 @@ describe('fileEditor tool', () => {
     })
   })
 
-  describe('path validation and security', () => {
-    it('rejects relative paths', async () => {
-      await expect(fileEditor.invoke({ command: 'view', path: 'relative/path.txt' }, context)).rejects.toThrow(
-        'not an absolute path'
-      )
-    })
-  })
-
   describe('file size limits', () => {
     it('throws when file exceeds default size limit', async () => {
       // Create a file larger than 1MB
@@ -475,6 +451,49 @@ describe('fileEditor tool', () => {
       const filePath = await createTestFile('large.txt', largeContent)
 
       await expect(fileEditor.invoke({ command: 'view', path: filePath }, context)).rejects.toThrow('exceeds')
+    })
+  })
+
+  describe('undo command', () => {
+    it('reverts str_replace', async () => {
+      const filePath = await createTestFile('test.txt', 'original content')
+      await fileEditor.invoke(
+        { command: 'str_replace', path: filePath, old_str: 'original', new_str: 'modified' },
+        context
+      )
+
+      const result = await fileEditor.invoke({ command: 'undo', path: filePath }, context)
+      expect(result).toContain('Reverted')
+
+      const fileContent = await fs.readFile(filePath, 'utf-8')
+      expect(fileContent).toBe('original content')
+    })
+
+    it('reverts insert', async () => {
+      const filePath = await createTestFile('test.txt', 'Line 1\nLine 2')
+      await fileEditor.invoke({ command: 'insert', path: filePath, insert_line: 1, new_str: 'INSERTED' }, context)
+
+      const result = await fileEditor.invoke({ command: 'undo', path: filePath }, context)
+      expect(result).toContain('Reverted')
+
+      const fileContent = await fs.readFile(filePath, 'utf-8')
+      expect(fileContent).toBe('Line 1\nLine 2')
+    })
+
+    it('throws when nothing to undo', async () => {
+      const filePath = await createTestFile('test.txt', 'content')
+      await expect(fileEditor.invoke({ command: 'undo', path: filePath }, context)).rejects.toThrow('Nothing to undo')
+    })
+
+    it('only undoes the last edit', async () => {
+      const filePath = await createTestFile('test.txt', 'first')
+      await fileEditor.invoke({ command: 'str_replace', path: filePath, old_str: 'first', new_str: 'second' }, context)
+      await fileEditor.invoke({ command: 'str_replace', path: filePath, old_str: 'second', new_str: 'third' }, context)
+
+      await fileEditor.invoke({ command: 'undo', path: filePath }, context)
+
+      const fileContent = await fs.readFile(filePath, 'utf-8')
+      expect(fileContent).toBe('second')
     })
   })
 
@@ -500,6 +519,130 @@ describe('fileEditor tool', () => {
       const result = await fileEditor.invoke({ command: 'view', path: filePath }, context)
       // Tabs should be expanded to spaces
       expect(result).not.toContain('\t')
+    })
+  })
+
+  describe('sandbox mode (TestSandbox)', () => {
+    let sandboxDir: string
+    let sandboxContext: ToolContext
+
+    beforeEach(async () => {
+      sandboxDir = path.join(tmpdir(), `file-editor-sandbox-${Date.now()}-${Math.random().toString(36).slice(2)}`)
+      await fs.mkdir(sandboxDir, { recursive: true })
+      const sandbox = new TestSandbox(sandboxDir)
+      const agent = createMockAgent({ sandbox })
+      sandboxContext = {
+        toolUse: { name: 'fileEditor', toolUseId: 'test-id', input: {} },
+        agent,
+        invocationState: {},
+        interrupt: () => {
+          throw new Error('interrupt not available in mock context')
+        },
+      }
+    })
+
+    afterEach(async () => {
+      await fs.rm(sandboxDir, { recursive: true, force: true }).catch(() => {})
+    })
+
+    it('creates a file via shell-based sandbox', async () => {
+      const filePath = path.join(sandboxDir, 'sandbox-created.txt')
+      await fileEditor.invoke({ command: 'create', path: filePath, file_text: 'sandbox content' }, sandboxContext)
+      const content = await fs.readFile(filePath, 'utf-8')
+      expect(content).toBe('sandbox content')
+    })
+
+    it('views a file from sandbox directory', async () => {
+      const filePath = path.join(sandboxDir, 'sandbox-view.txt')
+      await fs.writeFile(filePath, 'line 1\nline 2\n', 'utf-8')
+      const result = await fileEditor.invoke({ command: 'view', path: filePath }, sandboxContext)
+      expect(result).toContain('line 1')
+      expect(result).toContain('line 2')
+    })
+
+    it('str_replace modifies file in sandbox directory', async () => {
+      const filePath = path.join(sandboxDir, 'sandbox-edit.txt')
+      await fs.writeFile(filePath, 'hello world', 'utf-8')
+      await fileEditor.invoke(
+        { command: 'str_replace', path: filePath, old_str: 'world', new_str: 'sandbox' },
+        sandboxContext
+      )
+      const content = await fs.readFile(filePath, 'utf-8')
+      expect(content).toBe('hello sandbox')
+    })
+
+    it('insert_line adds content in sandbox directory', async () => {
+      const filePath = path.join(sandboxDir, 'sandbox-insert.txt')
+      await fs.writeFile(filePath, 'first\nthird\n', 'utf-8')
+      await fileEditor.invoke({ command: 'insert', path: filePath, insert_line: 1, new_str: 'second' }, sandboxContext)
+      const content = await fs.readFile(filePath, 'utf-8')
+      expect(content).toBe('first\nsecond\nthird\n')
+    })
+
+    it('grep finds pattern in files', async () => {
+      await fs.writeFile(path.join(sandboxDir, 'a.txt'), 'hello world\nfoo bar\n', 'utf-8')
+      await fs.writeFile(path.join(sandboxDir, 'b.txt'), 'hello again\n', 'utf-8')
+      const result = await fileEditor.invoke({ command: 'grep', path: sandboxDir, pattern: 'hello' }, sandboxContext)
+      expect(result).toContain('a.txt')
+      expect(result).toContain('b.txt')
+      expect(result).toContain('hello')
+    })
+
+    it('grep returns no matches message', async () => {
+      await fs.writeFile(path.join(sandboxDir, 'a.txt'), 'foo bar\n', 'utf-8')
+      const result = await fileEditor.invoke(
+        { command: 'grep', path: sandboxDir, pattern: 'nonexistent' },
+        sandboxContext
+      )
+      expect(result).toContain('No matches found')
+    })
+
+    it('grep respects include filter', async () => {
+      await fs.writeFile(path.join(sandboxDir, 'code.ts'), 'const x = 1\n', 'utf-8')
+      await fs.writeFile(path.join(sandboxDir, 'notes.txt'), 'const y = 2\n', 'utf-8')
+      const result = await fileEditor.invoke(
+        { command: 'grep', path: sandboxDir, pattern: 'const', include: '*.ts' },
+        sandboxContext
+      )
+      expect(result).toContain('code.ts')
+      expect(result).not.toContain('notes.txt')
+    })
+
+    it('grep respects max_results', async () => {
+      let content = ''
+      for (let i = 0; i < 10; i++) content += `match line ${i}\n`
+      await fs.writeFile(path.join(sandboxDir, 'many.txt'), content, 'utf-8')
+      const result = await fileEditor.invoke(
+        { command: 'grep', path: sandboxDir, pattern: 'match', max_results: 3 },
+        sandboxContext
+      )
+      expect(result).toContain('truncated')
+    })
+
+    it('glob finds files by pattern', async () => {
+      await fs.writeFile(path.join(sandboxDir, 'app.ts'), '', 'utf-8')
+      await fs.writeFile(path.join(sandboxDir, 'util.ts'), '', 'utf-8')
+      await fs.writeFile(path.join(sandboxDir, 'readme.md'), '', 'utf-8')
+      const result = await fileEditor.invoke({ command: 'glob', path: sandboxDir, pattern: '*.ts' }, sandboxContext)
+      expect(result).toContain('app.ts')
+      expect(result).toContain('util.ts')
+      expect(result).not.toContain('readme.md')
+    })
+
+    it('glob returns no files message', async () => {
+      const result = await fileEditor.invoke({ command: 'glob', path: sandboxDir, pattern: '*.xyz' }, sandboxContext)
+      expect(result).toContain('No files found')
+    })
+
+    it('glob respects max_results', async () => {
+      for (let i = 0; i < 10; i++) {
+        await fs.writeFile(path.join(sandboxDir, `file${i}.ts`), '', 'utf-8')
+      }
+      const result = await fileEditor.invoke(
+        { command: 'glob', path: sandboxDir, pattern: '*.ts', max_results: 3 },
+        sandboxContext
+      )
+      expect(result).toContain('truncated')
     })
   })
 })

@@ -4,6 +4,7 @@ import { Skill } from '../skill.js'
 import { BeforeInvocationEvent } from '../../../hooks/events.js'
 import { TextBlock, CachePointBlock } from '../../../types/messages.js'
 import { createMockAgent, invokeTrackedHook, type MockAgent } from '../../../__fixtures__/agent-helpers.js'
+import { NotASandboxLocalEnvironment } from '../../../sandbox/not-a-sandbox-local-environment.js'
 import { promises as fs } from 'fs'
 import * as path from 'path'
 import { tmpdir } from 'os'
@@ -32,6 +33,8 @@ describe('AgentSkills', () => {
   const makeSkill = (name: string, description = `Description of ${name}`, instructions = `Instructions for ${name}`) =>
     new Skill({ name, description, instructions })
 
+  const createMockAgentWithSandbox = () => createMockAgent({ sandbox: new NotASandboxLocalEnvironment() })
+
   beforeEach(async () => {
     testDir = path.join(tmpdir(), `agent-skills-test-${Date.now()}-${Math.random().toString(36).slice(2)}`)
     await fs.mkdir(testDir, { recursive: true })
@@ -54,6 +57,7 @@ describe('AgentSkills', () => {
     it('resolves a skill directory path', async () => {
       await createSkillDir('my-skill', '---\nname: my-skill\ndescription: A skill\n---\nBody.')
       const plugin = new AgentSkills({ skills: [path.join(testDir, 'my-skill')] })
+      await plugin.initAgent(createMockAgentWithSandbox())
       expect(await plugin.getAvailableSkills()).toHaveLength(1)
     })
 
@@ -61,6 +65,7 @@ describe('AgentSkills', () => {
       await createSkillDir('skill-a', '---\nname: skill-a\ndescription: Skill A\n---\nA.')
       await createSkillDir('skill-b', '---\nname: skill-b\ndescription: Skill B\n---\nB.')
       const plugin = new AgentSkills({ skills: [testDir] })
+      await plugin.initAgent(createMockAgentWithSandbox())
       expect(await plugin.getAvailableSkills()).toHaveLength(2)
     })
 
@@ -70,6 +75,7 @@ describe('AgentSkills', () => {
       const plugin = new AgentSkills({
         skills: [directSkill, path.join(testDir, 'file-skill')],
       })
+      await plugin.initAgent(createMockAgentWithSandbox())
       expect(await plugin.getAvailableSkills()).toHaveLength(2)
     })
 
@@ -83,6 +89,7 @@ describe('AgentSkills', () => {
 
     it('warns and skips non-existent paths', async () => {
       const plugin = new AgentSkills({ skills: ['/does/not/exist'] })
+      await plugin.initAgent(createMockAgentWithSandbox())
       expect(await plugin.getAvailableSkills()).toHaveLength(0)
     })
 
@@ -92,6 +99,7 @@ describe('AgentSkills', () => {
       await fs.writeFile(path.join(dirPath, 'SKILL.md'), 'totally broken, no frontmatter at all', 'utf-8')
 
       const plugin = new AgentSkills({ skills: [dirPath] })
+      await plugin.initAgent(createMockAgentWithSandbox())
       expect(await plugin.getAvailableSkills()).toHaveLength(0)
     })
 
@@ -106,6 +114,7 @@ describe('AgentSkills', () => {
       await fs.writeFile(path.join(testDir, 'bad-skill', 'SKILL.md'), 'no frontmatter', 'utf-8')
 
       const plugin = new AgentSkills({ skills: [testDir] })
+      await plugin.initAgent(createMockAgentWithSandbox())
       const skills = await plugin.getAvailableSkills()
       expect(skills).toHaveLength(1)
       expect(skills[0]!.name).toBe('good-skill')
@@ -129,7 +138,7 @@ describe('AgentSkills', () => {
 
     it('registers a BeforeInvocationEvent hook in initAgent', async () => {
       const plugin = new AgentSkills({ skills: [makeSkill('s')] })
-      const agent = createMockAgent()
+      const agent = createMockAgentWithSandbox()
       await plugin.initAgent(agent)
       expect(agent.trackedHooks).toHaveLength(1)
       expect(agent.trackedHooks[0]!.eventType).toBe(BeforeInvocationEvent)
@@ -146,7 +155,7 @@ describe('AgentSkills', () => {
       plugin = new AgentSkills({
         skills: [makeSkill('pdf-skill', 'Process PDFs')],
       })
-      agent = createMockAgent()
+      agent = createMockAgentWithSandbox()
       await plugin.initAgent(agent)
     })
 
@@ -227,7 +236,7 @@ describe('AgentSkills', () => {
       const plugin2 = new AgentSkills({
         skills: [makeSkill('test-skill', 'Use when: user says <hello> & "goodbye"')],
       })
-      const agent2 = createMockAgent()
+      const agent2 = createMockAgentWithSandbox()
       await plugin2.initAgent(agent2)
 
       const hook = agent2.trackedHooks[0]!
@@ -245,7 +254,7 @@ describe('AgentSkills', () => {
         '---\nname: located-skill\ndescription: Has a path\n---\nBody.'
       )
       const filePlugin = new AgentSkills({ skills: [dirPath] })
-      const fileAgent = createMockAgent()
+      const fileAgent = createMockAgentWithSandbox()
       await filePlugin.initAgent(fileAgent)
       await invokeTrackedHook(fileAgent, new BeforeInvocationEvent({ agent: fileAgent as any, invocationState: {} }))
 
@@ -256,7 +265,7 @@ describe('AgentSkills', () => {
 
     it('shows "no skills available" when empty', async () => {
       const emptyPlugin = new AgentSkills({ skills: [] })
-      const emptyAgent = createMockAgent()
+      const emptyAgent = createMockAgentWithSandbox()
       await emptyPlugin.initAgent(emptyAgent)
       await invokeTrackedHook(emptyAgent, new BeforeInvocationEvent({ agent: emptyAgent as any, invocationState: {} }))
 
@@ -289,7 +298,7 @@ describe('AgentSkills', () => {
       const multiPlugin = new AgentSkills({
         skills: [makeSkill('skill-a', 'First'), makeSkill('skill-b', 'Second'), makeSkill('skill-c', 'Third')],
       })
-      const multiAgent = createMockAgent()
+      const multiAgent = createMockAgentWithSandbox()
       await multiPlugin.initAgent(multiAgent)
       await invokeTrackedHook(multiAgent, new BeforeInvocationEvent({ agent: multiAgent as any, invocationState: {} }))
 
@@ -321,7 +330,7 @@ describe('AgentSkills', () => {
           }),
         ],
       })
-      agent = createMockAgent()
+      agent = createMockAgentWithSandbox()
       await plugin.initAgent(agent)
     })
 
@@ -409,7 +418,7 @@ describe('AgentSkills', () => {
         }
       )
       const plugin2 = new AgentSkills({ skills: [dirPath] })
-      const agent2 = createMockAgent()
+      const agent2 = createMockAgentWithSandbox()
       await plugin2.initAgent(agent2)
 
       const tools = plugin2.getTools()
@@ -436,7 +445,7 @@ describe('AgentSkills', () => {
         '---\nname: no-resources\ndescription: No extras\n---\nBody.'
       )
       const plugin2 = new AgentSkills({ skills: [dirPath] })
-      const agent2 = createMockAgent()
+      const agent2 = createMockAgentWithSandbox()
       await plugin2.initAgent(agent2)
 
       const tools = plugin2.getTools()
@@ -467,7 +476,7 @@ describe('AgentSkills', () => {
         files
       )
       const plugin2 = new AgentSkills({ skills: [dirPath], maxResourceFiles: 3 })
-      const agent2 = createMockAgent()
+      const agent2 = createMockAgentWithSandbox()
       await plugin2.initAgent(agent2)
 
       const tools = plugin2.getTools()
@@ -522,7 +531,7 @@ describe('AgentSkills', () => {
       mockFetchSuccess(SAMPLE_CONTENT)
 
       const plugin = new AgentSkills({ skills: ['https://example.com/SKILL.md'] })
-      await plugin.initAgent(createMockAgent())
+      await plugin.initAgent(createMockAgentWithSandbox())
 
       expect(await plugin.getAvailableSkills()).toHaveLength(1)
       expect((await plugin.getAvailableSkills())[0]!.name).toBe('url-skill')
@@ -536,7 +545,7 @@ describe('AgentSkills', () => {
       const plugin = new AgentSkills({
         skills: ['https://example.com/SKILL.md', path.join(testDir, 'local-skill')],
       })
-      await plugin.initAgent(createMockAgent())
+      await plugin.initAgent(createMockAgentWithSandbox())
 
       expect(await plugin.getAvailableSkills()).toHaveLength(2)
       const names = new Set((await plugin.getAvailableSkills()).map((s) => s.name))
@@ -552,7 +561,7 @@ describe('AgentSkills', () => {
       } as Response)
 
       const plugin = new AgentSkills({ skills: ['https://example.com/broken/SKILL.md'] })
-      await plugin.initAgent(createMockAgent())
+      await plugin.initAgent(createMockAgentWithSandbox())
 
       expect(await plugin.getAvailableSkills()).toHaveLength(0)
     })
@@ -563,7 +572,7 @@ describe('AgentSkills', () => {
       const plugin = new AgentSkills({
         skills: ['https://example.com/a/SKILL.md', 'https://example.com/b/SKILL.md'],
       })
-      await plugin.initAgent(createMockAgent())
+      await plugin.initAgent(createMockAgentWithSandbox())
 
       expect(await plugin.getAvailableSkills()).toHaveLength(1)
     })
@@ -572,7 +581,7 @@ describe('AgentSkills', () => {
       mockFetchSuccess(SAMPLE_CONTENT)
 
       const plugin = new AgentSkills({ skills: ['https://example.com/SKILL.md'] })
-      const agent = createMockAgent()
+      const agent = createMockAgentWithSandbox()
       await plugin.initAgent(agent)
 
       expect(await plugin.getAvailableSkills()).toHaveLength(1)
