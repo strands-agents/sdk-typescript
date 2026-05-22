@@ -27,6 +27,19 @@ import { fileEditor } from '@strands-agents/sdk/vended-tools/file-editor'
 import { httpRequest } from '@strands-agents/sdk/vended-tools/http-request'
 import { bash } from '@strands-agents/sdk/vended-tools/bash'
 
+import {
+  bash as barrelBash,
+  fileEditor as barrelFileEditor,
+  httpRequest as barrelHttpRequest,
+  notebook as barrelNotebook,
+} from '@strands-agents/sdk/vended-tools'
+
+import {
+  AgentSkills as BarrelAgentSkills,
+  ContextOffloader as BarrelContextOffloader,
+  InMemoryStorage as BarrelInMemoryStorage,
+} from '@strands-agents/sdk/vended-plugins'
+
 import { BedrockModel as BedrockFromSubpath } from '@strands-agents/sdk/models/bedrock'
 import { Graph, Swarm, MultiAgentState } from '@strands-agents/sdk/multiagent'
 import { AgentSkills } from '@strands-agents/sdk/vended-plugins/skills'
@@ -115,5 +128,13 @@ if (!(ctxErr instanceof Error)) {
 
 void AgentResult
 console.log('[pack-test] Error + result types importable')
+
+if (barrelBash !== bash || barrelFileEditor !== fileEditor || barrelHttpRequest !== httpRequest || barrelNotebook !== notebook) {
+  throw new Error('Barrel vended-tools exports do not match individual subpath exports')
+}
+if (BarrelAgentSkills !== AgentSkills || BarrelContextOffloader !== ContextOffloader || BarrelInMemoryStorage !== InMemoryStorage) {
+  throw new Error('Barrel vended-plugins exports do not match individual subpath exports')
+}
+console.log('[pack-test] barrel exports match individual subpath exports')
 
 console.log('[pack-test] OK')

@@ -87,6 +87,14 @@
     "./vended-interventions/steering": {
       "types": "./dist/src/vended-interventions/steering/index.d.ts",
       "default": "./dist/src/vended-interventions/steering/index.js"
+    },
+    "./vended-tools": {
+      "types": "./dist/src/vended-tools/index.d.ts",
+      "default": "./dist/src/vended-tools/index.js"
+    },
+    "./vended-plugins": {
+      "types": "./dist/src/vended-plugins/index.d.ts",
+      "default": "./dist/src/vended-plugins/index.js"
     }
   },
   "scripts": {
