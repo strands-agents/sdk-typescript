@@ -68,6 +68,8 @@ import { AgentAsTool } from './agent-as-tool.js'
 import type { AgentAsToolOptions } from './agent-as-tool.js'
 
 import type { z } from 'zod'
+import { MemoryManager } from '../memory/memory-manager.js'
+import type { MemoryManagerConfig } from '../memory/types.js'
 import { SessionManager } from '../session/session-manager.js'
 import { Tracer } from '../telemetry/tracer.js'
 import { Meter } from '../telemetry/meter.js'
@@ -186,9 +188,15 @@ export type AgentConfig = {
    */
   structuredOutputSchema?: z.ZodSchema
   /**
-   * Session manager for saving and restoring agent sessions
+   * Session manager for saving and restoring agent sessions.
    */
   sessionManager?: SessionManager
+  /**
+   * Memory manager for cross-session knowledge retrieval and storage.
+   * Manages one or more knowledge stores and exposes search/store tools.
+   * Accepts a {@link MemoryManager} instance or a {@link MemoryManagerConfig} object (auto-wrapped).
+   */
+  memoryManager?: MemoryManager | MemoryManagerConfig
   /**
    * Custom trace attributes to include in all spans.
    * These attributes are merged with standard attributes in telemetry spans.
@@ -278,6 +286,10 @@ export class Agent implements LocalAgent, InvokableAgent {
    * The session manager for saving and restoring agent sessions, if configured.
    */
   public readonly sessionManager?: SessionManager | undefined
+  /**
+   * The memory manager for cross-session knowledge retrieval and storage, if configured.
+   */
+  public readonly memoryManager?: MemoryManager | undefined
 
   private readonly _hooksRegistry: HookRegistryImplementation
   private readonly _pluginRegistry: PluginRegistry
@@ -311,6 +323,12 @@ export class Agent implements LocalAgent, InvokableAgent {
     this.id = config?.id ?? DEFAULT_AGENT_ID
     if (config?.description !== undefined) this.description = config.description
     this.sessionManager = config?.sessionManager
+    this.memoryManager =
+      config?.memoryManager instanceof MemoryManager
+        ? config.memoryManager
+        : config?.memoryManager
+          ? new MemoryManager(config.memoryManager)
+          : undefined
 
     if (typeof config?.model === 'string') {
       this.model = new BedrockModel({ modelId: config.model })
@@ -361,6 +379,7 @@ export class Agent implements LocalAgent, InvokableAgent {
       this._conversationManager,
       ...retryStrategies,
       ...(config?.plugins ?? []),
+      ...(this.memoryManager ? [this.memoryManager] : []),
       ...(config?.sessionManager ? [config.sessionManager] : []),
       new ModelPlugin(this.model),
     ])

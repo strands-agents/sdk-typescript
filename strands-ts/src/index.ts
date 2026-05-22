@@ -267,6 +267,20 @@ export type { Logger } from './logging/types.js'
 export { type McpClientConfig, type McpTransport, type TasksConfig, type McpConnectionState, McpClient } from './mcp.js'
 export type { ElicitationCallback, ElicitationContext } from './types/elicitation.js'
 
+// Memory management
+export { MemoryManager } from './memory/index.js'
+export type {
+  KnowledgeEntry,
+  KnowledgeStore,
+  SearchOptions,
+  MemorySearchOptions,
+  MemoryStoreOptions,
+  StoreConfig,
+  MemoryToolConfig,
+  MemoryToolsConfig,
+  MemoryManagerConfig,
+} from './memory/index.js'
+
 // Session management
 export { SessionManager } from './session/session-manager.js'
 export type {
