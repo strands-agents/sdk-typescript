@@ -28,8 +28,8 @@ classifiers = [
     "Topic :: Software Development :: Libraries :: Python Modules",
 ]
 dependencies = [
-    # Pinned to pgrayy/wasm-deps until upstream PRs land. Imports as `wasmtime`.
-    "pgrayy-wasmtime @ git+https://github.com/pgrayy/wasm-deps.git@ed34d105ee3db091ef4bcf5aabacb1586e122e96#subdirectory=wasmtime-py",
+    # Imports as `wasmtime`. Pinned to pgrayy fork until upstream PRs land.
+    "pgrayy-wasmtime>=46.0.6,<47.0.0",
 ]
 
 
@@ -42,10 +42,6 @@ Homepage = "https://github.com/strands-agents/sdk-typescript"
 "Bug Tracker" = "https://github.com/strands-agents/sdk-typescript/issues"
 Documentation = "https://strandsagents.com"
 
-
-[tool.hatch.metadata]
-# pgrayy-wasmtime is pinned via a git URL until upstream PRs land.
-allow-direct-references = true
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/strands"]

@@ -35,7 +35,15 @@ await build({
   platform: 'browser',
   target: 'es2022',
   define: { 'import.meta.vitest': 'undefined' },
-  external: ['strands:*', 'fs', 'path'],
+  external: [
+    '@modelcontextprotocol/sdk/client/sse.js',
+    '@modelcontextprotocol/sdk/client/stdio.js',
+    'child_process',
+    'fs',
+    'node:*',
+    'path',
+    'strands:*',
+  ],
   outfile: 'dist/bundle.js',
   logLevel: 'info',
 });
