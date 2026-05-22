@@ -5,6 +5,7 @@
  * for evaluation decisions.
  */
 
+import type { LocalAgent } from '../../../types/agent.js'
 import type { LifecycleObserver } from '../../../types/lifecycle-observer.js'
 import type { JSONValue } from '../../../types/json.js'
 
@@ -49,6 +50,9 @@ export interface SteeringContextData {
 export interface SteeringContextProvider extends LifecycleObserver {
   /** Identifier for this provider instance. */
   readonly name: string
+
+  /** Subscribe to hooks on the owning agent. Required for providers. */
+  observeAgent(agent: LocalAgent): void | Promise<void>
 
   /** Return the current context snapshot for steering evaluation. */
   get context(): SteeringContextData

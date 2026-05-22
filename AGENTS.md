@@ -168,6 +168,7 @@ sdk-typescript/
 │   │   │   ├── elicitation.ts
 │   │   │   ├── interrupt.ts
 │   │   │   ├── json.ts
+│   │   │   ├── lifecycle-observer.ts
 │   │   │   ├── media.ts
 │   │   │   ├── messages.ts
 │   │   │   ├── serializable.ts

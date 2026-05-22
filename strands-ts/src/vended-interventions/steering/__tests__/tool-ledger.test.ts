@@ -84,8 +84,14 @@ describe('ToolLedgerProvider', () => {
     await hookRegistry.invokeCallbacks(makeAfter(agent, 'error', new Error('boom')))
 
     const calls = provider.context.calls as Array<Record<string, unknown>>
-    expect(calls[0]?.status).toBe('error')
-    expect(calls[0]?.error).toBe('boom')
+    expect(calls[0]).toMatchObject({
+      id: 'tu-1',
+      name: 'searchWeb',
+      args: { q: 'hi' },
+      status: 'error',
+      error: 'boom',
+      endTime: expect.any(String),
+    })
   })
 
   it('drops oldest entries when ledger exceeds maxEntries', async () => {
