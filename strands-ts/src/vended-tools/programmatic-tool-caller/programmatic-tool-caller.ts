@@ -269,7 +269,7 @@ function createToolFunction(agent: Agent, toolName: string): (input?: Record<str
  * @returns A {@link ToolResultBlock} carrying the captured console output
  *          on success, or a stack trace on error
  */
-export async function executeProgrammaticCode(code: string, agent: Agent, toolUseId: string): Promise<ToolResultBlock> {
+async function executeProgrammaticCode(code: string, agent: Agent, toolUseId: string): Promise<ToolResultBlock> {
   // Friendly warning when consent is implicitly granted. The TS SDK does
   // not have a vended-tool-level interactive prompt helper (see bash.ts —
   // it also runs without user confirmation), so we follow the same
@@ -303,15 +303,19 @@ export async function executeProgrammaticCode(code: string, agent: Agent, toolUs
   const names = Object.keys(namespace)
   const values = names.map((n) => namespace[n])
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor as any
+  // Pull the AsyncFunction constructor off an `async function` instance.
+  // It is not exposed as a global, so this is the canonical retrieval path.
+  // The signature is the same as `Function`: variadic string arg names
+  // followed by a final string body.
+  type AsyncFunctionConstructor = new (...args: string[]) => (...args: unknown[]) => Promise<void>
+  const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor as AsyncFunctionConstructor
 
   let userFn: (...args: unknown[]) => Promise<void>
   try {
     // The body wraps the user code in a no-op IIFE-style block, allowing
     // bare top-level `return` and `break`/`continue` validation to behave
     // as inside a normal function body.
-    userFn = new AsyncFunction(...names, code) as (...args: unknown[]) => Promise<void>
+    userFn = new AsyncFunction(...names, code)
   } catch (err) {
     // SyntaxError lands here (compile-time).
     return errorResult(err, toolUseId)
@@ -351,6 +355,22 @@ function errorResult(err: unknown, toolUseId: string): ToolResultBlock {
     content: [new TextBlock(text)],
     error: errorObj,
   })
+}
+
+/**
+ * Runtime type guard: does this agent expose the `agent.tool` direct-tool-call
+ * proxy? Always true for instances of {@link Agent}, but the public
+ * `LocalAgent` interface (the type of `ToolContext.agent`) does not declare
+ * the proxy, so we narrow with this predicate before reaching for it.
+ */
+function hasToolProxy(agent: unknown): agent is Agent {
+  return (
+    typeof agent === 'object' &&
+    agent !== null &&
+    'tool' in agent &&
+    typeof (agent as Agent).tool === 'object' &&
+    (agent as Agent).tool !== null
+  )
 }
 
 /**
@@ -394,14 +414,16 @@ export const programmaticToolCaller = tool({
     }
 
     // The Agent class implements LocalAgent and additionally exposes the
-    // `tool` proxy. Direct tool calls require this surface.
-    const agent = context.agent as unknown as Agent
-    if (!('tool' in (agent as object)) || typeof (agent as Agent).tool !== 'object') {
+    // `tool` proxy. Direct tool calls require this surface, so we narrow
+    // `context.agent` (typed as LocalAgent) to `Agent` via a runtime guard
+    // rather than an unchecked double cast.
+    if (!hasToolProxy(context.agent)) {
       throw new Error(
         'programmatic_tool_caller requires an agent that exposes the `agent.tool` proxy ' +
           '(see https://github.com/strands-agents/sdk-typescript/pull/985)'
       )
     }
+    const agent = context.agent
 
     const result = await executeProgrammaticCode(input.code, agent, context.toolUse.toolUseId)
 
@@ -426,17 +448,3 @@ export const programmaticToolCaller = tool({
     return textBlock.text
   },
 })
-
-/**
- * Internal helpers exposed for unit testing. Not part of the public API.
- *
- * @internal
- */
-export const _internals = {
-  getAllowedTools,
-  loadExtraModules,
-  buildNamespace,
-  createCaptureConsole,
-  unwrapToolResult,
-  executeProgrammaticCode,
-}

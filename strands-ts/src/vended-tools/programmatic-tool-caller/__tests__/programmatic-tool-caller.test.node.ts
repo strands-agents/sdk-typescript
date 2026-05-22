@@ -1,11 +1,9 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { programmaticToolCaller } from '../programmatic-tool-caller.js'
 import { Agent } from '../../../agent/agent.js'
 import { MockMessageModel } from '../../../__fixtures__/mock-message-model.js'
 import { createMockTool } from '../../../__fixtures__/tool-helpers.js'
 import { TextBlock, ToolResultBlock } from '../../../types/messages.js'
-
-const ENV_KEYS = ['PROGRAMMATIC_TOOL_CALLER_ALLOWED_TOOLS', 'PROGRAMMATIC_TOOL_CALLER_EXTRA_MODULES'] as const
 
 /**
  * Helper to invoke the programmatic_tool_caller tool against an Agent and
@@ -39,25 +37,13 @@ function getText(result: ToolResultBlock): string {
 }
 
 describe('programmatic_tool_caller tool', () => {
-  // Ensure env-driven configuration cannot leak between tests.
-  const originalEnv: Record<string, string | undefined> = {}
-
+  // vitest config has `unstubEnvs: true`, so vi.stubEnv() values are
+  // automatically restored after each test. We just zero-out the two
+  // env vars we care about at the start of every test so values from
+  // a previous run (or the host) cannot leak in.
   beforeEach(() => {
-    for (const key of ENV_KEYS) {
-      originalEnv[key] = process.env[key]
-      delete process.env[key]
-    }
-  })
-
-  afterEach(() => {
-    for (const key of ENV_KEYS) {
-      const value = originalEnv[key]
-      if (value === undefined) {
-        delete process.env[key]
-      } else {
-        process.env[key] = value
-      }
-    }
+    vi.stubEnv('PROGRAMMATIC_TOOL_CALLER_ALLOWED_TOOLS', '')
+    vi.stubEnv('PROGRAMMATIC_TOOL_CALLER_EXTRA_MODULES', '')
   })
 
   describe('tool surface', () => {
@@ -253,7 +239,7 @@ describe('programmatic_tool_caller tool', () => {
 
   describe('namespace policy', () => {
     it('respects PROGRAMMATIC_TOOL_CALLER_ALLOWED_TOOLS as a positive filter', async () => {
-      process.env.PROGRAMMATIC_TOOL_CALLER_ALLOWED_TOOLS = 'allowed_only'
+      vi.stubEnv('PROGRAMMATIC_TOOL_CALLER_ALLOWED_TOOLS', 'allowed_only')
       const agent = makeAgent([
         createMockTool(
           'allowed_only',
@@ -303,7 +289,7 @@ describe('programmatic_tool_caller tool', () => {
     })
 
     it('loads allow-listed Node built-ins when requested via env', async () => {
-      process.env.PROGRAMMATIC_TOOL_CALLER_EXTRA_MODULES = 'path,os'
+      vi.stubEnv('PROGRAMMATIC_TOOL_CALLER_EXTRA_MODULES', 'path,os')
       const agent = makeAgent()
       const result = await runCode(
         agent,
@@ -317,7 +303,7 @@ describe('programmatic_tool_caller tool', () => {
     })
 
     it('skips and warns on disallowed extra modules without exposing them', async () => {
-      process.env.PROGRAMMATIC_TOOL_CALLER_EXTRA_MODULES = 'child_process'
+      vi.stubEnv('PROGRAMMATIC_TOOL_CALLER_EXTRA_MODULES', 'child_process')
       const agent = makeAgent()
       const result = await runCode(agent, 'console.log(child_process.exec)')
       // child_process is not exposed → ReferenceError captured.
