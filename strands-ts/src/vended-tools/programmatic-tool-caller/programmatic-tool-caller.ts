@@ -1,5 +1,8 @@
 import { z } from 'zod'
-import * as util from 'util'
+// Snapshot `inspect` at module load to immunize the capture console against
+// runtime mutation of the shared `util` namespace (e.g. when a user enables
+// `util` via PROGRAMMATIC_TOOL_CALLER_EXTRA_MODULES and reassigns `util.inspect`).
+import { inspect as utilInspect } from 'util'
 import { tool } from '../../tools/tool-factory.js'
 import { logger } from '../../logging/logger.js'
 import { TextBlock, ToolResultBlock } from '../../types/messages.js'
@@ -25,6 +28,68 @@ const programmaticToolCallerInputSchema = z.object({
  * additional binding alongside its underscore-normalized form.
  */
 const VALID_JS_IDENTIFIER = /^[A-Za-z_$][A-Za-z0-9_$]*$/
+
+/**
+ * JavaScript reserved words and contextual keywords that cannot be used as
+ * `AsyncFunction` parameter names. Using one as a parameter would cause
+ * `new AsyncFunction(...)` to throw a SyntaxError on every execution,
+ * affecting unrelated user code. Detected up-front so the offending tool
+ * is skipped with a warning instead of breaking the whole tool.
+ *
+ * Source: ECMAScript reserved words (strict mode) + module-context reserved
+ * (`await`) + `arguments` (illegal as a parameter name in strict mode, which
+ * is the default for any function created via `new AsyncFunction`).
+ */
+const JS_RESERVED_WORDS: ReadonlySet<string> = new Set([
+  'arguments',
+  'await',
+  'break',
+  'case',
+  'catch',
+  'class',
+  'const',
+  'continue',
+  'debugger',
+  'default',
+  'delete',
+  'do',
+  'else',
+  'enum',
+  'eval',
+  'export',
+  'extends',
+  'false',
+  'finally',
+  'for',
+  'function',
+  'if',
+  'implements',
+  'import',
+  'in',
+  'instanceof',
+  'interface',
+  'let',
+  'new',
+  'null',
+  'package',
+  'private',
+  'protected',
+  'public',
+  'return',
+  'static',
+  'super',
+  'switch',
+  'this',
+  'throw',
+  'true',
+  'try',
+  'typeof',
+  'var',
+  'void',
+  'while',
+  'with',
+  'yield',
+])
 
 /**
  * Normalize a module name into a valid JavaScript identifier suitable for use
@@ -126,7 +191,7 @@ function createCaptureConsole(): { console: Record<string, (...args: unknown[]) 
 
   const append = (args: unknown[]): void => {
     const formatted = args
-      .map((a) => (typeof a === 'string' ? a : util.inspect(a, { depth: null, breakLength: Infinity })))
+      .map((a) => (typeof a === 'string' ? a : utilInspect(a, { depth: null, breakLength: Infinity })))
       .join(' ')
     lines.push(formatted)
   }
@@ -242,11 +307,25 @@ function buildNamespace(
   // original name when it is a valid identifier on its own (e.g. names with
   // hyphens are exposed only via the underscore alias).
   for (const toolName of allowedToolNames) {
-    const wrapper = createToolFunction(agent, toolName)
     const underscoreName = toolName.replaceAll('-', '_')
 
+    // The underscore-normalized name is the canonical binding inside the
+    // namespace. If it is not a valid JS identifier (e.g. tool name starts
+    // with a digit, or matches a JS reserved word like `return`), the
+    // `new AsyncFunction(...)` call below would throw a SyntaxError that
+    // poisons EVERY execution — even code that doesn't reference this tool.
+    // Skip with a warning instead so unrelated tools keep working.
+    if (!VALID_JS_IDENTIFIER.test(underscoreName) || JS_RESERVED_WORDS.has(underscoreName)) {
+      logger.warn(
+        `tool=<${toolName}> | name is not a valid JS identifier (or is a reserved word) ` +
+          `after underscore normalization (<${underscoreName}>); skipping namespace injection`
+      )
+      continue
+    }
+
+    const wrapper = createToolFunction(agent, toolName)
     namespace[underscoreName] = wrapper
-    if (toolName !== underscoreName && VALID_JS_IDENTIFIER.test(toolName)) {
+    if (toolName !== underscoreName && VALID_JS_IDENTIFIER.test(toolName) && !JS_RESERVED_WORDS.has(toolName)) {
       namespace[toolName] = wrapper
     }
   }

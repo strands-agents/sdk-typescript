@@ -409,4 +409,115 @@ describe('programmatic_tool_caller tool', () => {
       expect(agent.messages.length).toBe(before + 3)
     })
   })
+
+  describe('robustness against bad tool names', () => {
+    it('skips a tool whose name is a JS reserved word and keeps other tools working', async () => {
+      // `return` is a strict-mode reserved word; using it as an AsyncFunction
+      // parameter name would throw SyntaxError on every execution.
+      const agent = makeAgent([
+        createMockTool(
+          'return',
+          (ctx) =>
+            new ToolResultBlock({
+              toolUseId: ctx.toolUse.toolUseId,
+              status: 'success',
+              content: [new TextBlock('should-not-be-callable')],
+            })
+        ),
+        createMockTool(
+          'good',
+          (ctx) =>
+            new ToolResultBlock({
+              toolUseId: ctx.toolUse.toolUseId,
+              status: 'success',
+              content: [new TextBlock('ok')],
+            })
+        ),
+      ])
+      const result = await runCode(agent, 'console.log(await good({}))')
+      expect(result.status).toBe('success')
+      expect(getText(result)).toBe('ok')
+
+      const blocked = await runCode(agent, "await this['return']({})")
+      expect(blocked.status).toBe('error')
+    })
+
+    it('skips a tool whose name starts with a digit and keeps other tools working', async () => {
+      const agent = makeAgent([
+        createMockTool(
+          '1bad',
+          (ctx) =>
+            new ToolResultBlock({
+              toolUseId: ctx.toolUse.toolUseId,
+              status: 'success',
+              content: [new TextBlock('nope')],
+            })
+        ),
+        createMockTool(
+          'good',
+          (ctx) =>
+            new ToolResultBlock({
+              toolUseId: ctx.toolUse.toolUseId,
+              status: 'success',
+              content: [new TextBlock('ok')],
+            })
+        ),
+      ])
+      const result = await runCode(agent, 'console.log(await good({}))')
+      expect(result.status).toBe('success')
+      expect(getText(result)).toBe('ok')
+    })
+  })
+
+  describe('console capture is immune to util.inspect mutation', () => {
+    it('keeps formatting non-string args even when user code reassigns util.inspect', async () => {
+      vi.stubEnv('PROGRAMMATIC_TOOL_CALLER_EXTRA_MODULES', 'util')
+      const agent = makeAgent()
+      // First execution: poison `util.inspect` (which is exposed as the
+      // namespace binding `util` — its `inspect` field is mutable).
+      const poison = await runCode(
+        agent,
+        `
+          util.inspect = () => 'POISONED'
+          console.log('first', { foo: 'bar' })
+        `
+      )
+      expect(poison.status).toBe('success')
+      // First-run output uses the snapshotted inspect, not the poisoned one.
+      expect(getText(poison)).toContain("foo: 'bar'")
+
+      // Second, independent execution must still format objects correctly —
+      // proving the mutation did not leak into the capture console.
+      const after = await runCode(agent, "console.log({ foo: 'baz' })")
+      expect(after.status).toBe('success')
+      expect(getText(after)).toContain("foo: 'baz'")
+      expect(getText(after)).not.toContain('POISONED')
+    })
+  })
+
+  describe('post-return async writes are silently dropped (documented)', () => {
+    it('drops console.log scheduled with setTimeout that resolves after the tool returns', async () => {
+      const agent = makeAgent()
+      // We schedule a write 50ms in the future but DO NOT await it.
+      // The tool will return immediately; the scheduled write hits the
+      // (now-unread) buffer with no effect on the returned text. This
+      // documents the boundary so future regressions are visible.
+      const result = await runCode(
+        agent,
+        `
+          setTimeout(() => console.log('LATE'), 50)
+          console.log('on time')
+        `
+      )
+      expect(result.status).toBe('success')
+      expect(getText(result)).toBe('on time')
+      // Wait long enough for the unawaited timeout to fire — the test
+      // would only fail here if 'LATE' somehow leaked into the next
+      // capture (cross-run pollution) or to real stdout.
+      await new Promise((r) => setTimeout(r, 80))
+
+      const next = await runCode(agent, "console.log('next')")
+      expect(getText(next)).toBe('next')
+    })
+  })
 })

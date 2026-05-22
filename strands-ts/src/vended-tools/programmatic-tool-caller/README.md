@@ -10,7 +10,7 @@ TypeScript port of Python's [`programmatic_tool_caller`][py-pr] from `strands-ag
 **This tool executes arbitrary JavaScript without a sandbox.**
 
 - Only use with trusted agents/inputs.
-- Code runs with the full permissions of the Node.js process (full filesystem and network access if not explicitly restricted via `PROGRAMMATIC_TOOL_CALLER_EXTRA_MODULES`).
+- Code runs with the full permissions of the Node.js process — full filesystem, network, and child-process access. The `PROGRAMMATIC_TOOL_CALLER_EXTRA_MODULES` allow-list **only controls which Node built-ins are pre-bound as namespace identifiers**; it does _not_ prevent user code from calling `await import('child_process')` or accessing globals like `process` and `globalThis`.
 - For untrusted callers, deploy behind a sandbox (container, VM, separate process with seccomp).
 
 By default the tool **does not prompt** for confirmation — there is no
@@ -66,9 +66,18 @@ for (let i = 0; i < 5; i++) {
 ```
 
 The captured `console.log/info/warn/error/debug/trace` output is returned as
-the tool result text. **Real `process.stdout` / `process.stderr` are never
-written to** — output is buffered for test isolation and to keep noise out of
-agent logs.
+the tool result text. The capture is achieved by binding a shadow `console`
+into the user-function scope; calls to `console.log(...)` from user code go to
+the buffer, **not** to real stdout/stderr.
+
+> **Note (best-effort capture):** the capture only intercepts the `console`
+> binding inside the user function. User code can still bypass it deliberately
+> via `globalThis.console.log(...)`, `process.stdout.write(...)`, or by using
+> any module exposed through `PROGRAMMATIC_TOOL_CALLER_EXTRA_MODULES` that
+> writes directly to a stream. Likewise, async work that resolves _after_ the
+> tool returns (e.g. an unawaited `setTimeout`) will write to the buffer after
+> it has already been read — those writes are silently dropped. Treat capture
+> as test-isolation and log-tidiness, not a security boundary.
 
 ## Tool exposure rules
 
@@ -99,6 +108,20 @@ Tool calls inside the user code:
 | `PROGRAMMATIC_TOOL_CALLER_ALLOWED_TOOLS` | Comma-separated allow-list of tool names the user code may call. Default: every registered tool except `programmatic_tool_caller`.                                                                                                                                                                                                                     |
 | `PROGRAMMATIC_TOOL_CALLER_EXTRA_MODULES` | Comma-separated allow-listed Node built-ins to expose. Allow-list: `fs`, `fs/promises`, `path`, `crypto`, `url`, `util`, `querystring`, `os`, `buffer`, `stream`, `events`. Module names with non-identifier characters are normalized to valid JS identifiers (`fs/promises` → `fs_promises`). Anything outside the allow-list is logged and skipped. |
 | `BYPASS_TOOL_CONSENT`                    | If unset, a `logger.warn` previews the code before execution. (Set to `"true"` to suppress the warning.)                                                                                                                                                                                                                                               |
+
+## Tool name compatibility
+
+`new AsyncFunction(...names, body)` rejects parameter names that are not valid
+JavaScript identifiers, and the function is implicitly _strict mode_ (so
+reserved words like `return`, contextual keywords like `await`, and
+`arguments` are also illegal). The tool registry, however, accepts any name
+matching `^[a-zA-Z0-9_-]+$`, which is broader.
+
+To avoid one badly-named tool poisoning every execution, tools whose
+underscore-normalized name is not a valid identifier (or is a reserved word)
+are **skipped** with a `logger.warn` instead of injected. The rest of the
+namespace builds normally. Rename such tools at registration time to expose
+them via `programmatic_tool_caller`.
 
 ## Reserved namespace
 
