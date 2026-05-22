@@ -257,7 +257,7 @@ describe('FunctionTool', () => {
         expect(receivedInput).toEqual(inputData)
       })
 
-      it('handles null return values correctly', async () => {
+      it('handles null return values with empty content', async () => {
         const tool = new FunctionTool({
           name: 'nullTool',
           description: 'Returns null',
@@ -273,16 +273,11 @@ describe('FunctionTool', () => {
           type: 'toolResultBlock',
           toolUseId: 'test-null',
           status: 'success',
-          content: [
-            expect.objectContaining({
-              type: 'textBlock',
-              text: '<null>',
-            }),
-          ],
+          content: [],
         })
       })
 
-      it('handles undefined return values correctly', async () => {
+      it('handles undefined return values with empty content', async () => {
         const tool = new FunctionTool({
           name: 'undefinedTool',
           description: 'Returns undefined',
@@ -299,12 +294,32 @@ describe('FunctionTool', () => {
           type: 'toolResultBlock',
           toolUseId: 'test-undefined',
           status: 'success',
-          content: [
-            expect.objectContaining({
-              type: 'textBlock',
-              text: '<undefined>',
-            }),
-          ],
+          content: [],
+        })
+      })
+
+      it('handles void (no return) callbacks with empty content', async () => {
+        const tool = new FunctionTool({
+          name: 'voidTool',
+          description: 'Side-effectful tool with no return value',
+          inputSchema: { type: 'object', properties: { name: { type: 'string' } } },
+          // @ts-expect-error void is not assignable to JSONValue, but this is the real-world pattern for side-effectful tools
+          callback: (input: unknown): void => {
+            const { name } = input as { name: string }
+            // side effect only — console.log(`Hello, ${name}!`)
+            void name
+          },
+        })
+
+        const { result } = await collectGenerator(
+          tool.stream(createMockContext({ name: 'voidTool', toolUseId: 'test-void', input: { name: 'Alice' } }))
+        )
+
+        expect(result).toEqual({
+          type: 'toolResultBlock',
+          toolUseId: 'test-void',
+          status: 'success',
+          content: [],
         })
       })
 
