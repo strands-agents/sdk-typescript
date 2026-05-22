@@ -99,7 +99,7 @@ export interface AgentMetricsData {
 
   /**
    * Per-invocation metrics for recent invocations.
-   * Only the most recent 100 entries are retained.
+   * Only the most recent 50 entries are retained.
    */
   agentInvocations: InvocationMetricsData[]
 
@@ -181,7 +181,7 @@ export class AgentMetrics implements JSONSerializable<AgentMetricsData> {
 
   /**
    * Per-invocation metrics for recent invocations.
-   * Only the most recent 100 entries are retained to prevent unbounded memory growth.
+   * Only the most recent 50 entries are retained to prevent unbounded memory growth.
    * For full history, collect {@link latestAgentInvocation} from each {@link AgentResult}.
    */
   readonly agentInvocations: InvocationMetricsData[]
@@ -283,7 +283,7 @@ export class AgentMetrics implements JSONSerializable<AgentMetricsData> {
  * Users who need full history can collect per-invocation metrics
  * from successive AgentResult objects.
  */
-const MAX_INVOCATION_HISTORY = 100
+const MAX_INVOCATION_HISTORY = 50
 
 /**
  * Accumulates local metrics during agent invocation.
