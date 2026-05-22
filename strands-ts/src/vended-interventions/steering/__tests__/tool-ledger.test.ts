@@ -1,11 +1,22 @@
 import { describe, expect, it } from 'vitest'
 import { Agent } from '../../../agent/agent.js'
 import { AfterToolCallEvent, BeforeToolCallEvent } from '../../../hooks/events.js'
+import type { HookRegistryImplementation } from '../../../hooks/registry.js'
 import { TextBlock, ToolResultBlock } from '../../../types/messages.js'
 import { ToolLedgerProvider } from '../providers/tool-ledger.js'
 
 describe('ToolLedgerProvider', () => {
   const toolUse = { name: 'searchWeb', toolUseId: 'tu-1', input: { q: 'hi' } }
+
+  function setupAgent(provider: ToolLedgerProvider): {
+    agent: Agent
+    hookRegistry: HookRegistryImplementation
+  } {
+    const agent = new Agent()
+    const hookRegistry = (agent as unknown as { _hooksRegistry: HookRegistryImplementation })._hooksRegistry
+    provider.observeAgent(agent)
+    return { agent, hookRegistry }
+  }
 
   function makeBefore(agent: Agent): BeforeToolCallEvent {
     return new BeforeToolCallEvent({ agent, toolUse, tool: undefined, invocationState: {} })
@@ -27,14 +38,14 @@ describe('ToolLedgerProvider', () => {
     })
   }
 
-  it('records pending entry on beforeToolCall', () => {
-    const agent = new Agent()
+  it('records pending entry on beforeToolCall', async () => {
     const provider = new ToolLedgerProvider()
+    const { agent, hookRegistry } = setupAgent(provider)
 
     expect(provider.context.type).toBe('toolLedger')
     expect(provider.context.calls).toEqual([])
 
-    provider.beforeToolCall(makeBefore(agent))
+    await hookRegistry.invokeCallbacks(makeBefore(agent))
 
     const calls = provider.context.calls as Array<Record<string, unknown>>
     expect(calls).toHaveLength(1)
@@ -46,12 +57,12 @@ describe('ToolLedgerProvider', () => {
     })
   })
 
-  it('flips pending to success after afterToolCall', () => {
-    const agent = new Agent()
+  it('flips pending to success after afterToolCall', async () => {
     const provider = new ToolLedgerProvider()
+    const { agent, hookRegistry } = setupAgent(provider)
 
-    provider.beforeToolCall(makeBefore(agent))
-    provider.afterToolCall(makeAfter(agent, 'success'))
+    await hookRegistry.invokeCallbacks(makeBefore(agent))
+    await hookRegistry.invokeCallbacks(makeAfter(agent, 'success'))
 
     const calls = provider.context.calls as Array<Record<string, unknown>>
     expect(calls).toHaveLength(1)
@@ -65,24 +76,24 @@ describe('ToolLedgerProvider', () => {
     })
   })
 
-  it('records error status and message', () => {
-    const agent = new Agent()
+  it('records error status and message', async () => {
     const provider = new ToolLedgerProvider()
+    const { agent, hookRegistry } = setupAgent(provider)
 
-    provider.beforeToolCall(makeBefore(agent))
-    provider.afterToolCall(makeAfter(agent, 'error', new Error('boom')))
+    await hookRegistry.invokeCallbacks(makeBefore(agent))
+    await hookRegistry.invokeCallbacks(makeAfter(agent, 'error', new Error('boom')))
 
     const calls = provider.context.calls as Array<Record<string, unknown>>
     expect(calls[0]?.status).toBe('error')
     expect(calls[0]?.error).toBe('boom')
   })
 
-  it('drops oldest entries when ledger exceeds maxEntries', () => {
-    const agent = new Agent()
+  it('drops oldest entries when ledger exceeds maxEntries', async () => {
     const provider = new ToolLedgerProvider({ maxEntries: 2 })
+    const { agent, hookRegistry } = setupAgent(provider)
 
     for (const id of ['a', 'b', 'c']) {
-      provider.beforeToolCall(
+      await hookRegistry.invokeCallbacks(
         new BeforeToolCallEvent({
           agent,
           toolUse: { name: 't', toolUseId: id, input: {} },

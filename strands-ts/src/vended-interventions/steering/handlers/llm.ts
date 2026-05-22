@@ -28,39 +28,95 @@ export type PromptBuilder = (context: SteeringContextData[], toolUse?: ToolUse) 
 /**
  * Default prompt builder. Returns content blocks with a cache point
  * between static instructions and dynamic context/event data.
+ *
+ * See: https://github.com/strands-agents/agent-sop
  */
 function defaultPromptBuilder(context: SteeringContextData[], toolUse?: ToolUse): ContentBlock[] {
   const contextStr = context.length > 0 ? JSON.stringify(context, null, 2) : 'No context available'
 
-  let eventDescription: string
-  if (toolUse) {
-    eventDescription = `Tool: ${toolUse.name}\nArguments: ${JSON.stringify(toolUse.input, null, 2)}`
-  } else {
-    eventDescription = 'General evaluation'
-  }
+  const actionType = toolUse ? 'tool call' : 'action'
+  const actionTypeTitle = toolUse ? 'Tool Call' : 'Action'
+  const eventDescription = toolUse
+    ? `Tool: ${toolUse.name}\nArguments: ${JSON.stringify(toolUse.input, null, 2)}`
+    : 'General evaluation'
 
   const hasLedger = context.some((c) => c.type === 'toolLedger')
-
   const ledgerExplanation = hasLedger
-    ? `\n\nThe context includes a ledger with tool_calls. Each entry has a "status" field:
-- "pending": the tool is currently being evaluated by you and has NOT started executing yet
-- "success": the tool completed successfully in a previous turn
-- "error": the tool failed or was cancelled in a previous turn`
+    ? `
+
+### Understanding Ledger Tool States
+
+If the context includes a ledger with tool_calls, the "status" field indicates:
+
+- **"pending"**: The tool is CURRENTLY being evaluated by you (the steering agent).
+This is NOT a duplicate call — it's the tool you're deciding whether to approve.
+The tool has NOT started executing yet.
+- **"success"**: The tool completed successfully in a previous turn
+- **"error"**: The tool failed or was cancelled in a previous turn
+
+**IMPORTANT**: When you see a tool with status="pending" that matches the tool you're evaluating,
+that IS the current tool being evaluated. It is NOT already executing or a duplicate.`
     : ''
 
-  const instructions = `You are a steering agent that evaluates actions another agent is attempting.
-Decide whether the action should proceed, be guided with feedback, or pause for human confirmation.
+  // Static framing (cached): role, constraints, decision criteria, ledger semantics.
+  const instructions = `# Steering Evaluation
 
-Rules:
-- Base decisions ONLY on the provided context data
-- Do not use external knowledge about tools or domains
-- Focus on patterns: repeated failures, inappropriate timing, excessive retries${ledgerExplanation}`
+## Overview
 
-  return [
-    new TextBlock(instructions),
-    new CachePointBlock({ cacheType: 'default' }),
-    new TextBlock(`Context:\n${contextStr}\n\nEvent:\n${eventDescription}`),
-  ]
+You are a STEERING AGENT that evaluates a ${actionType} that ANOTHER AGENT is attempting to make.
+Your job is to provide contextual guidance to help the other agent navigate workflows effectively.
+You act as a safety net that can intervene when patterns in the context data suggest the agent
+should try a different approach or get human input.
+
+**YOUR ROLE:**
+- Analyze context data for concerning patterns (repeated failures, inappropriate timing, etc.)
+- Provide just-in-time guidance when the agent is going down an ineffective path
+- Allow normal operations to proceed when context shows no issues
+
+**CRITICAL CONSTRAINTS:**
+- Base decisions ONLY on the context data provided
+- Do NOT use external knowledge about domains, URLs, or tool purposes
+- Do NOT make assumptions about what tools "should" or "shouldn't" do
+- Focus ONLY on patterns in the context data${ledgerExplanation}
+
+## Steps
+
+### 1. Analyze the ${actionTypeTitle}
+
+Review ONLY the context data. Look for patterns in the data that indicate:
+
+- Previous failures or successes with this tool
+- Frequency of attempts
+- Any relevant tracking information
+
+**Constraints:**
+- You MUST base analysis ONLY on the provided context data
+- You MUST NOT use external knowledge about tool purposes or domains
+- You SHOULD identify patterns in the context data
+- You MAY reference relevant context data to inform your decision
+
+### 2. Make Steering Decision
+
+**Constraints:**
+- You MUST respond with exactly one of: "proceed", "guide", or "confirm"
+- You MUST base the decision ONLY on context data patterns
+- Your reason will be shown to the AGENT as guidance
+
+**Decision Options:**
+- "proceed" if context data shows no concerning patterns
+- "guide" if context data shows patterns requiring intervention
+- "confirm" if context data shows patterns requiring human input`
+
+  // Dynamic block (uncached): per-call context and event payload.
+  const dynamic = `## Context
+
+${contextStr}
+
+## Event to Evaluate
+
+${eventDescription}`
+
+  return [new TextBlock(instructions), new CachePointBlock({ cacheType: 'default' }), new TextBlock(dynamic)]
 }
 
 // ---------------------------------------------------------------------------
@@ -71,11 +127,11 @@ Rules:
  * Configuration for the LLMSteeringHandler.
  */
 export interface LLMSteeringHandlerConfig {
+  /** System prompt defining the steering guidance rules. */
+  systemPrompt: SystemPrompt
+
   /** Model for steering evaluation. Defaults to a {@link BedrockModel} instance. */
   model?: Model
-
-  /** Optional system prompt for the steering LLM. */
-  systemPrompt?: SystemPrompt
 
   /** Custom prompt builder for evaluation prompts. Defaults to defaultPromptBuilder. */
   promptBuilder?: PromptBuilder
@@ -112,8 +168,9 @@ type SteeringDecision = z.infer<typeof STEERING_DECISION>
  * intervention action.
  *
  * Only `beforeToolCall` is implemented — model-output steering is not
- * delegated to the LLM. Subclass and override `afterModelCall` to
- * add LLM-driven evaluation of model responses.
+ * delegated to the LLM. Subclass and override `afterModelCall` (which
+ * carries the narrowed `Proceed | Guide` return) to add LLM-driven
+ * evaluation of model responses.
  *
  * @example
  * ```typescript
@@ -132,9 +189,9 @@ export class LLMSteeringHandler extends SteeringHandler {
 
   private readonly _promptBuilder: PromptBuilder
   private readonly _model: Model
-  private readonly _systemPrompt?: SystemPrompt
+  private readonly _systemPrompt: SystemPrompt
 
-  constructor(config: LLMSteeringHandlerConfig = {}) {
+  constructor(config: LLMSteeringHandlerConfig) {
     const contextProviders =
       config.contextProviders === undefined ? [new ToolLedgerProvider()] : config.contextProviders
     super({ contextProviders })
@@ -142,12 +199,10 @@ export class LLMSteeringHandler extends SteeringHandler {
     this.name = config.name ?? 'strands:llm-steering-handler'
     this._promptBuilder = config.promptBuilder ?? defaultPromptBuilder
     this._model = config.model ?? new BedrockModel()
-    if (config.systemPrompt !== undefined) {
-      this._systemPrompt = config.systemPrompt
-    }
+    this._systemPrompt = config.systemPrompt
   }
 
-  protected override async evaluateToolCall(event: BeforeToolCallEvent): Promise<Proceed | Guide | Confirm> {
+  override async beforeToolCall(event: BeforeToolCallEvent): Promise<Proceed | Guide | Confirm> {
     const context = this.getSteeringContext()
     const prompt = this._promptBuilder(context, event.toolUse)
     const decision = await this._invoke(prompt)
@@ -168,7 +223,7 @@ export class LLMSteeringHandler extends SteeringHandler {
   private async _invoke(prompt: string | ContentBlock[]): Promise<SteeringDecision> {
     const inner = new Agent({
       model: this._model,
-      ...(this._systemPrompt !== undefined && { systemPrompt: this._systemPrompt }),
+      systemPrompt: this._systemPrompt,
       structuredOutputSchema: STEERING_DECISION,
       printer: false,
     })

@@ -38,6 +38,7 @@ import { AgentPrinter, getDefaultAppender, type Printer } from './printer.js'
 import type { Plugin } from '../plugins/plugin.js'
 import type { InterventionHandler } from '../interventions/handler.js'
 import { InterventionRegistry } from '../interventions/registry.js'
+import { isLifecycleObserver } from '../types/lifecycle-observer.js'
 import { PluginRegistry } from '../plugins/registry.js'
 import { SlidingWindowConversationManager } from '../conversation-manager/sliding-window-conversation-manager.js'
 import { NullConversationManager } from '../conversation-manager/null-conversation-manager.js'
@@ -456,6 +457,12 @@ export class Agent implements LocalAgent, InvokableAgent {
     )
 
     await this._pluginRegistry.initialize(this)
+
+    for (const handler of this._interventionRegistry.handlers) {
+      if (isLifecycleObserver(handler)) {
+        await handler.observeAgent(this)
+      }
+    }
 
     await this._hooksRegistry.invokeCallbacks(new InitializedEvent({ agent: this }))
 

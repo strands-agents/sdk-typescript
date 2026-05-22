@@ -174,10 +174,19 @@ sdk-typescript/
 │   │   │   ├── snapshot.ts
 │   │   │   └── validation.ts
 │   │   │
-│   │   ├── vended-interventions/  # Optional vended intervention handlers
-│   │   │   └── hitl/             # Human-in-the-loop approval handler
+│   │   ├── vended-interventions/ # Optional vended intervention handlers
+│   │   │   ├── hitl/             # Human-in-the-loop approval handler
+│   │   │   │   ├── __tests__/
+│   │   │   │   ├── hitl.ts
+│   │   │   │   └── index.ts
+│   │   │   └── steering/         # Steering handler base + LLM-driven steering
 │   │   │       ├── __tests__/
-│   │   │       ├── hitl.ts
+│   │   │       ├── handlers/
+│   │   │       │   ├── handler.ts
+│   │   │       │   └── llm.ts
+│   │   │       ├── providers/
+│   │   │       │   ├── context-provider.ts
+│   │   │       │   └── tool-ledger.ts
 │   │   │       └── index.ts
 │   │   │
 │   │   ├── vended-plugins/       # Optional vended plugins
@@ -345,7 +354,7 @@ sdk-typescript/
 - **`strands-ts/src/telemetry/`**: OpenTelemetry tracing and metrics
 - **`strands-ts/src/tools/`**: Tool definitions, types, and structured output validation with Zod schemas
 - **`strands-ts/src/types/`**: Core type definitions used across the SDK
-- **`strands-ts/src/vended-interventions/`**: Optional vended intervention handlers (hitl — not part of core SDK, independently importable)
+- **`strands-ts/src/vended-interventions/`**: Optional vended intervention handlers (hitl, steering — not part of core SDK, independently importable)
 - **`strands-ts/src/vended-plugins/`**: Optional vended plugins (context-offloader, skills — not part of core SDK, independently importable)
 - **`strands-ts/src/vended-tools/`**: Optional vended tools (bash, file-editor, http-request, notebook)
 - **`strands-ts/generated/`**: Auto-generated WIT interface type declarations
