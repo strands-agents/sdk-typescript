@@ -323,7 +323,29 @@ describe('Model', () => {
         )
       })
 
-      it('preserves SyntaxError instead of overwriting with MaxTokensError when tool input JSON is malformed', async () => {
+      it('throws MaxTokensError when stopReason is maxTokens and contentBlockStop carries truncated tool_use JSON', async () => {
+        const provider = new TestModelProvider(async function* () {
+          yield { type: 'modelMessageStartEvent', role: 'assistant' }
+          yield {
+            type: 'modelContentBlockStartEvent',
+            start: { type: 'toolUseStart', toolUseId: 'tool1', name: 'get_weather' },
+          }
+          yield {
+            type: 'modelContentBlockDeltaEvent',
+            delta: { type: 'toolUseInputDelta', input: '{"location"' },
+          }
+          yield { type: 'modelContentBlockStopEvent' }
+          yield { type: 'modelMessageStopEvent', stopReason: 'maxTokens' }
+        })
+
+        const messages = [new Message({ role: 'user', content: [new TextBlock('Hi')] })]
+
+        await expect(async () => await collectGenerator(provider.streamAggregated(messages))).rejects.toThrow(
+          MaxTokensError
+        )
+      })
+
+      it('re-throws SyntaxError when tool_use JSON is malformed and stop reason is not maxTokens', async () => {
         const provider = new TestModelProvider(async function* () {
           yield { type: 'modelMessageStartEvent', role: 'assistant' }
           yield {
@@ -335,7 +357,7 @@ describe('Model', () => {
             delta: { type: 'toolUseInputDelta', input: '{invalid json' },
           }
           yield { type: 'modelContentBlockStopEvent' }
-          yield { type: 'modelMessageStopEvent', stopReason: 'maxTokens' }
+          yield { type: 'modelMessageStopEvent', stopReason: 'endTurn' }
         })
 
         const messages = [new Message({ role: 'user', content: [new TextBlock('Hi')] })]
