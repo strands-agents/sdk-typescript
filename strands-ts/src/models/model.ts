@@ -349,6 +349,7 @@ export abstract class Model<T extends BaseModelConfig = BaseModelConfig> {
       let finalStopReason: StopReason | null = null
       let metadata: ModelMetadataEvent | undefined = undefined
       let redactionMessage: string | undefined = undefined
+      let pendingParseError: SyntaxError | null = null
 
       for await (const event_data of this.stream(messages, options)) {
         const event = this._convert_to_class_event(event_data)
@@ -426,7 +427,7 @@ export abstract class Model<T extends BaseModelConfig = BaseModelConfig> {
             } catch (e: unknown) {
               if (e instanceof SyntaxError) {
                 logger.error('unable to parse JSON string', e)
-                throw e
+                pendingParseError = e
               }
             }
             break
@@ -472,6 +473,18 @@ export abstract class Model<T extends BaseModelConfig = BaseModelConfig> {
       if (!stoppedMessage || !finalStopReason) {
         // If we exit the loop without completing a message or stop reason, throw an error
         throw new ModelError('Stream ended without completing a message')
+      }
+
+      // If tool_use JSON failed to parse and the stream stopped due to maxTokens, the JSON was
+      // truncated by the token limit — surface MaxTokensError rather than a bare SyntaxError.
+      if (pendingParseError) {
+        if (finalStopReason === 'maxTokens') {
+          throw new MaxTokensError(
+            'Model reached maximum token limit (tool_use JSON was truncated). This is an unrecoverable state that requires intervention.',
+            stoppedMessage
+          )
+        }
+        throw pendingParseError
       }
 
       // Attach metadata after redaction so it applies to the final message.
