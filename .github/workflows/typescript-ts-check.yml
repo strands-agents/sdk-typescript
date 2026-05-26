@@ -1,4 +1,4 @@
-name: Security Audit
+name: "TypeScript: Code Quality"
 
 on:
   workflow_call:
@@ -8,8 +8,8 @@ on:
         type: string
 
 jobs:
-  security-audit:
-    name: NPM Security Audit
+  code-quality:
+    name: Code Quality
     permissions:
       contents: read
     runs-on: ubuntu-latest
@@ -25,9 +25,22 @@ jobs:
         uses: actions/setup-node@v6
         with:
           node-version: 22
+          package-manager-cache: false
 
       - name: Install dependencies
         run: npm ci
 
-      - name: Run security audit
-        run: npm audit --audit-level=high
+      - name: Build
+        run: npm run build
+
+      - name: Run linting
+        run: npm run lint
+
+      - name: Check code formatting
+        run: npm run format:check
+
+      - name: Run type checking
+        run: npm run type-check
+
+      - name: Verify browser bundle
+        run: npm run check:browser-bundle

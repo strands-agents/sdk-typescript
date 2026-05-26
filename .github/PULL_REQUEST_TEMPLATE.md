@@ -23,7 +23,7 @@ Other (please describe):
 
 How have you tested the change?
 
-- [ ] I ran `npm run check`
+- [ ] I ran the relevant checks (`hatch run prepare` for Python, `npm run check` for TypeScript)
 
 ## Checklist
 - [ ] I have read the CONTRIBUTING document

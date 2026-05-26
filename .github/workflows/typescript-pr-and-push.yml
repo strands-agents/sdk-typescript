@@ -1,0 +1,59 @@
+name: "TypeScript: Pull Request and Push"
+
+on:
+  pull_request:
+    branches: [ main ]
+    types: [opened, synchronize, reopened, ready_for_review]
+    paths:
+      - 'strands-ts/**'
+      - 'strands-wasm/**'
+      - 'strands-py-wasm/**'
+      - 'strandly/**'
+      - 'package.json'
+      - 'package-lock.json'
+      - '.github/workflows/typescript-*'
+  merge_group:
+    types: [checks_requested]
+  push:
+    branches: [ main ]
+    paths:
+      - 'strands-ts/**'
+      - 'strands-wasm/**'
+      - 'strands-py-wasm/**'
+      - 'strandly/**'
+      - 'package.json'
+      - 'package-lock.json'
+      - '.github/workflows/typescript-*'
+  workflow_dispatch:
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  call-security-audit:
+    uses: ./.github/workflows/typescript-security-audit.yml
+    permissions:
+      contents: read
+    with:
+      ref: ${{ github.event.pull_request.head.sha }}
+
+  call-ts-check:
+    uses: ./.github/workflows/typescript-ts-check.yml
+    permissions:
+      contents: read
+    with:
+      ref: ${{ github.event.pull_request.head.sha }}
+
+  call-ts-test:
+    uses: ./.github/workflows/typescript-ts-test.yml
+    permissions:
+      contents: read
+    with:
+      ref: ${{ github.event.pull_request.head.sha }}
+
+  call-test-package-pack:
+    uses: ./.github/workflows/typescript-test-package-pack.yml
+    permissions:
+      contents: read
+    with:
+      ref: ${{ github.event.pull_request.head.sha }}
