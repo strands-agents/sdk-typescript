@@ -15,6 +15,7 @@ import {
   type ContentBlockData,
   Message,
   type MessageData,
+  type StopReason,
   type SystemPrompt,
   type SystemPromptData,
   TextBlock,
@@ -494,6 +495,41 @@ export class Agent implements LocalAgent, InvokableAgent {
   }
 
   /**
+   * Evaluates the per-invocation budget caps in {@link InvokeOptions} against
+   * the current invocation's metrics. Called at the top of each agent-loop
+   * iteration, after `_throwIfCancelled` and before `startCycle`.
+   *
+   * Reads from {@link AgentMetrics.latestAgentInvocation} (scoped to the
+   * current invocation) — not `cycleCount` / `accumulatedUsage`, which are
+   * lifetime accumulators that would cause caps to fire prematurely on the
+   * second `invoke()` call against a reused agent.
+   *
+   * Priority on simultaneous trip: maxTurns → maxTotalTokens → maxOutputTokens.
+   *
+   * Returns the {@link StopReason} the loop should terminate with, or
+   * `undefined` if every configured cap is still within budget.
+   */
+  private _checkMaxBudgets(options: InvokeOptions | undefined): StopReason | undefined {
+    if (!options) return undefined
+    const invocation = this._meter.metrics.latestAgentInvocation
+    if (!invocation) return undefined
+
+    const cycleCount = invocation.cycles.length
+    const { outputTokens, totalTokens } = invocation.usage
+
+    if (options.maxTurns !== undefined && cycleCount >= options.maxTurns) {
+      return 'maxTurnsExceeded'
+    }
+    if (options.maxTotalTokens !== undefined && totalTokens >= options.maxTotalTokens) {
+      return 'maxTotalTokensExceeded'
+    }
+    if (options.maxOutputTokens !== undefined && outputTokens >= options.maxOutputTokens) {
+      return 'maxOutputTokensExceeded'
+    }
+    return undefined
+  }
+
+  /**
    * The tools this agent can use.
    */
   get tools(): Tool[] {
@@ -928,6 +964,19 @@ export class Agent implements LocalAgent, InvokableAgent {
       // Main agent loop - continues until model stops without requesting tools
       while (true) {
         this._throwIfCancelled()
+
+        const budgetStopReason = this._checkMaxBudgets(options)
+        if (budgetStopReason) {
+          // Fallback: a zero-valued cap can trip on iteration 1 before any messages are appended.
+          const lastMessage = this.messages.at(-1) ?? new Message({ role: 'assistant', content: [] })
+          return new AgentResult({
+            stopReason: budgetStopReason,
+            lastMessage,
+            traces: this._tracer.localTraces,
+            metrics: this._meter.metrics,
+            invocationState,
+          })
+        }
 
         // Start metrics cycle tracking
         const { cycleId, startTime: cycleStartTime } = this._meter.startCycle()

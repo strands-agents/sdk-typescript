@@ -118,6 +118,73 @@ export interface InvokeOptions {
    * ```
    */
   cancelSignal?: AbortSignal
+
+  /**
+   * Maximum number of agent loop iterations (turns) for this invocation.
+   * A turn is one model call plus any tool execution that follows.
+   *
+   * Per-invocation: counted from this `invoke()` / `stream()` call, not
+   * cumulative across reuses of the same agent. Checked at the top of each
+   * loop iteration against
+   * `metrics.latestAgentInvocation.cycles.length`. Tools requested by the
+   * previous turn always run to completion before the cap fires, so
+   * `agent.messages` remains in a reinvokable state.
+   *
+   * Setting `maxTurns: 0` returns immediately with
+   * `stopReason: 'maxTurnsExceeded'` and a synthesized empty assistant
+   * message — no model call is made and no user input is appended.
+   *
+   * Omit (or set to `undefined`) for no limit.
+   */
+  maxTurns?: number
+
+  /**
+   * Maximum cumulative model-generated tokens for this invocation, summed
+   * across every model call in the agent loop
+   * (`metrics.latestAgentInvocation.usage.outputTokens`).
+   *
+   * Per-invocation: counted from this call, not cumulative across reuses of
+   * the same agent. Distinct from per-call provider-level `maxTokens`
+   * settings (e.g. `GoogleModelConfig.params.maxOutputTokens`), which bound
+   * a single model call's output. This option bounds the loop's cumulative
+   * output across however many calls it makes.
+   *
+   * Checked at the top of each loop iteration. When the count is at or above
+   * `maxOutputTokens`, the agent returns with
+   * `stopReason: 'maxOutputTokensExceeded'`.
+   *
+   * Soft cap: a single oversized model response can overshoot the budget.
+   * The agent stops at the first turn boundary on or after the budget is
+   * reached; it does not bound any individual model call.
+   *
+   * Omit for no limit.
+   */
+  maxOutputTokens?: number
+
+  /**
+   * Maximum cumulative input + output tokens for this invocation
+   * (`metrics.latestAgentInvocation.usage.totalTokens`). Each model call's
+   * input includes prior turns, so this counter compounds across the run —
+   * it approximates the total token spend you would be billed for.
+   *
+   * Per-invocation: counted from this call, not cumulative across reuses of
+   * the same agent.
+   *
+   * Checked at the top of each loop iteration. When the count is at or above
+   * `maxTotalTokens`, the agent returns with
+   * `stopReason: 'maxTotalTokensExceeded'`.
+   *
+   * Soft cap: a single oversized model response can overshoot the budget.
+   * The agent stops at the first turn boundary on or after the budget is
+   * reached; it does not bound any individual model call.
+   *
+   * If both `maxOutputTokens` and `maxTotalTokens` would trip on the same
+   * iteration, `maxTotalTokensExceeded` wins. If `maxTurns` would also trip,
+   * `maxTurnsExceeded` wins over both.
+   *
+   * Omit for no limit.
+   */
+  maxTotalTokens?: number
 }
 
 /**
