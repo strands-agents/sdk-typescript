@@ -8,6 +8,7 @@ on:
       - 'strands-wasm/**'
       - 'strands-py-wasm/**'
       - 'strandly/**'
+      - 'wit/**'
       - 'package.json'
       - 'package-lock.json'
       - '.github/workflows/typescript-*'
