@@ -27,15 +27,15 @@ jobs:
     with:
       ref: ${{ github.event.pull_request.head.sha }}
 
-  call-ts-test:
-    uses: ./.github/workflows/ts-test.yml
+  call-py-check:
+    uses: ./.github/workflows/py-check.yml
     permissions:
       contents: read
     with:
       ref: ${{ github.event.pull_request.head.sha }}
 
-  call-py-check:
-    uses: ./.github/workflows/py-check.yml
+  call-ts-test:
+    uses: ./.github/workflows/ts-test.yml
     permissions:
       contents: read
     with:

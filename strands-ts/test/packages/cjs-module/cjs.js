@@ -12,6 +12,19 @@ async function main() {
   const { httpRequest } = await import('@strands-agents/sdk/vended-tools/http-request')
   const { bash } = await import('@strands-agents/sdk/vended-tools/bash')
 
+  const {
+    bash: barrelBash,
+    fileEditor: barrelFileEditor,
+    httpRequest: barrelHttpRequest,
+    notebook: barrelNotebook,
+  } = await import('@strands-agents/sdk/vended-tools')
+
+  const {
+    AgentSkills,
+    ContextOffloader,
+    InMemoryStorage,
+  } = await import('@strands-agents/sdk/vended-plugins')
+
   const { BedrockModel: BedrockFromSubpath } = await import('@strands-agents/sdk/models/bedrock')
   const { OpenAIModel } = await import('@strands-agents/sdk/models/openai')
   const { AnthropicModel } = await import('@strands-agents/sdk/models/anthropic')
@@ -67,6 +80,18 @@ async function main() {
     throw new Error('BedrockModel from subpath should match main export')
   }
   console.log('✓ Model subpath exports verified')
+
+  // Verify barrel exports match individual subpath exports
+  if (barrelBash !== bash || barrelFileEditor !== fileEditor || barrelHttpRequest !== httpRequest || barrelNotebook !== notebook) {
+    throw new Error('Barrel vended-tools exports do not match individual subpath exports')
+  }
+  console.log('✓ Barrel vended-tools exports verified')
+
+  // Verify barrel vended-plugins exports are constructible
+  if (typeof AgentSkills !== 'function' || typeof ContextOffloader !== 'function' || typeof InMemoryStorage !== 'function') {
+    throw new Error('Barrel vended-plugins exports are not constructible')
+  }
+  console.log('✓ Barrel vended-plugins exports verified')
 
   // Reference remaining imports so static analysis doesn't flag them unused.
   void OpenAIModel

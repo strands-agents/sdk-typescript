@@ -28,8 +28,8 @@ classifiers = [
     "Topic :: Software Development :: Libraries :: Python Modules",
 ]
 dependencies = [
-    # Pinned to pgrayy/wasm-deps until upstream PRs land. Imports as `wasmtime`.
-    "pgrayy-wasmtime @ git+https://github.com/pgrayy/wasm-deps.git@ed34d105ee3db091ef4bcf5aabacb1586e122e96#subdirectory=wasmtime-py",
+    # Imports as `wasmtime`. Pinned to pgrayy/wasm-deps git URL until upstream PRs land.
+    "pgrayy-wasmtime @ git+https://github.com/pgrayy/wasm-deps.git@983c56c037#subdirectory=wasmtime-py",
 ]
 
 

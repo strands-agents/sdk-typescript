@@ -177,6 +177,42 @@ describe('CachePointBlock', () => {
       cacheType: 'default',
     })
   })
+
+  test('creates cache point block with ttl', () => {
+    const block = new CachePointBlock({ cacheType: 'default', ttl: '1h' })
+
+    expect(block).toEqual({
+      type: 'cachePointBlock',
+      cacheType: 'default',
+      ttl: '1h',
+    })
+  })
+
+  test('serializes ttl in toJSON', () => {
+    const block = new CachePointBlock({ cacheType: 'default', ttl: '5m' })
+
+    expect(block.toJSON()).toEqual({
+      cachePoint: { cacheType: 'default', ttl: '5m' },
+    })
+  })
+
+  test('omits ttl in toJSON when not set', () => {
+    const block = new CachePointBlock({ cacheType: 'default' })
+
+    expect(block.toJSON()).toEqual({
+      cachePoint: { cacheType: 'default' },
+    })
+  })
+
+  test('roundtrips ttl via fromJSON', () => {
+    const block = CachePointBlock.fromJSON({ cachePoint: { cacheType: 'default', ttl: '1h' } })
+
+    expect(block).toEqual({
+      type: 'cachePointBlock',
+      cacheType: 'default',
+      ttl: '1h',
+    })
+  })
 })
 
 describe('JsonBlock', () => {

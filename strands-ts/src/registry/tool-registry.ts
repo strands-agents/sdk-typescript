@@ -1,5 +1,5 @@
 import type { Tool } from '../tools/tool.js'
-import { ToolValidationError } from '../errors.js'
+import { ToolValidationError, ToolNotFoundError } from '../errors.js'
 
 /**
  * Registry for managing Tool instances with name-based CRUDL operations.
@@ -60,6 +60,45 @@ export class ToolRegistry {
    */
   get(name: string): Tool | undefined {
     return this._tools.get(name)
+  }
+
+  /**
+   * Resolves a tool name using normalization strategies and returns the tool.
+   *
+   * Resolution order:
+   * 1. Exact match
+   * 2. Underscore-to-hyphen substitution (e.g. `my_tool` → `my-tool`)
+   * 3. Case-insensitive match
+   *
+   * @param name - The name to look up
+   * @returns The resolved tool
+   * @throws ToolNotFoundError if no tool with the given name exists
+   */
+  resolve(name: string): Tool {
+    // 1. Direct match
+    const exact = this._tools.get(name)
+    if (exact) {
+      return exact
+    }
+
+    const tools = this.list()
+
+    // 2. Underscore-to-hyphen normalization
+    if (name.includes('_')) {
+      const match = tools.find((t) => t.name.replace(/-/g, '_') === name)
+      if (match) {
+        return match
+      }
+    }
+
+    // 3. Case-insensitive match
+    const lowerName = name.toLowerCase()
+    const caseMatch = tools.find((t) => t.name.toLowerCase() === lowerName)
+    if (caseMatch) {
+      return caseMatch
+    }
+
+    throw new ToolNotFoundError(name)
   }
 
   /**

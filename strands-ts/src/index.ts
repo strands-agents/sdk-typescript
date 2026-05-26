@@ -15,7 +15,9 @@ export { StateStore } from './state-store.js'
 export { AgentResult } from './types/agent.js'
 export type { AgentConfig, ToolList, ToolExecutorStrategy } from './agent/agent.js'
 export type { AgentAsToolOptions } from './agent/agent-as-tool.js'
+export type { ToolCaller, ToolCallerProxy, ToolHandle, DirectToolCallOptions } from './agent/tool-caller.js'
 export type { InvocationState, InvokeArgs, InvokeOptions, LocalAgent } from './types/agent.js'
+export type { LifecycleObserver } from './types/lifecycle-observer.js'
 
 // Snapshot types
 export { SNAPSHOT_SCHEMA_VERSION } from './types/snapshot.js'
@@ -34,6 +36,7 @@ export {
   ModelThrottledError,
   ToolValidationError,
   StructuredOutputError,
+  ToolNotFoundError,
 } from './errors.js'
 
 // Interrupt system
@@ -183,6 +186,8 @@ export type {
   BedrockModelOptions,
   BedrockGuardrailConfig,
   BedrockGuardrailRedactionConfig,
+  BedrockCacheConfig,
+  BedrockCacheTTL,
 } from './models/bedrock.js'
 
 // Agent streaming event types
@@ -269,6 +274,7 @@ export type { Logger } from './logging/types.js'
 
 // MCP Client types and implementations
 export {
+  type McpClientOptions,
   type McpClientConfig,
   type McpClientCredentials,
   type McpTransport,
@@ -277,6 +283,7 @@ export {
   type McpConnectionState,
   McpClient,
 } from './mcp.js'
+export { type McpServerConfig } from './mcp-config.js'
 export type { ElicitationCallback, ElicitationContext } from './types/elicitation.js'
 
 // Session management

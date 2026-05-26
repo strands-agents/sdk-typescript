@@ -7,7 +7,7 @@ import type {
 } from '../hooks/events.js'
 import type { Proceed, Deny, Guide, Confirm, Transform } from './actions.js'
 
-type Awaitable<T> = T | Promise<T>
+export type Awaitable<T> = T | Promise<T>
 
 /**
  * What to do when a handler throws during evaluation.

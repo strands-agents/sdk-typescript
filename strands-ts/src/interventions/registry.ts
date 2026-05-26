@@ -42,6 +42,11 @@ export class InterventionRegistry {
     this._registerHooks(hookRegistry)
   }
 
+  /** Registered handlers in registration order. */
+  get handlers(): readonly InterventionHandler[] {
+    return this._handlers
+  }
+
   private _registerHooks(hookRegistry: HookRegistry): void {
     if (this._handlers.some((h) => h.beforeInvocation !== InterventionHandler.prototype.beforeInvocation)) {
       hookRegistry.addCallback(BeforeInvocationEvent, (e) => this._onBeforeInvocation(e), {

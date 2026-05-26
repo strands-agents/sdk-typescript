@@ -208,6 +208,29 @@ export class StructuredOutputError extends Error {
 }
 
 /**
+ * Error thrown when a tool cannot be found by name.
+ *
+ * Thrown by {@link ToolRegistry.resolve} when the requested tool name doesn't
+ * match any registered tool, even after underscore-to-hyphen normalization
+ * and case-insensitive matching.
+ */
+export class ToolNotFoundError extends Error {
+  /** The tool name that was requested but not found. */
+  public readonly toolName: string
+
+  /**
+   * Creates a new ToolNotFoundError.
+   *
+   * @param toolName - The tool name that was not found
+   */
+  constructor(toolName: string) {
+    super(`Tool '${toolName}' not found`)
+    this.name = 'ToolNotFoundError'
+    this.toolName = toolName
+  }
+}
+
+/**
  * Internal control-flow mechanism for unwinding nested `yield*` generator chains
  * when cancellation is detected during model streaming.
  * Caught at the `_stream()` level and converted to an `AgentResult` with `stopReason: 'cancelled'`.

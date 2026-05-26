@@ -1,5 +1,7 @@
 import { inject } from 'vitest'
-import type { Message } from '@strands-agents/sdk'
+import { Agent, ToolResultBlock, tool } from '@strands-agents/sdk'
+import type { AgentResult, InterruptResponseContentData, JSONValue, Message } from '@strands-agents/sdk'
+import { z } from 'zod'
 
 /**
  * Checks whether we're running tests in the browser.
@@ -52,3 +54,64 @@ export function countToolResults(messages: Message[], status: 'success' | 'error
     msg.content.some((block) => block.type === 'toolResultBlock' && block.status === status)
   ).length
 }
+
+/**
+ * Extracts text content from tool result blocks matching the given status.
+ */
+export function getToolResultText(messages: Message[], status?: 'success' | 'error'): string {
+  return messages
+    .filter((m) => m.role === 'user')
+    .flatMap((m) =>
+      m.content.filter((b): b is ToolResultBlock => b.type === 'toolResultBlock' && (!status || b.status === status))
+    )
+    .flatMap((tr) => tr.content.filter((b) => b.type === 'textBlock').map((b) => b.text))
+    .join(' ')
+}
+
+/**
+ * Resumes an interrupted agent by responding to all pending interrupts,
+ * looping until the agent completes or a max iteration limit is reached.
+ */
+export async function resumeUntilDone(
+  agent: Agent,
+  result: AgentResult,
+  respond: (interrupt: { id: string; name: string; reason?: unknown }) => JSONValue,
+  maxRounds = 10
+): Promise<AgentResult> {
+  let current = result
+  for (let i = 0; i < maxRounds && current.stopReason === 'interrupt'; i++) {
+    const responses: InterruptResponseContentData[] = current.interrupts!.map((interrupt) => ({
+      interruptResponse: {
+        interruptId: interrupt.id,
+        response: respond(interrupt),
+      },
+    }))
+    current = await agent.invoke(responses)
+  }
+  return current
+}
+
+// ================================
+// Common Tool Fixtures
+// ================================
+
+export const timeTool = tool({
+  name: 'time_tool',
+  description: 'Returns the current time. Always call this tool when asked about time.',
+  inputSchema: z.object({}),
+  callback: async () => '12:00',
+})
+
+export const weatherTool = tool({
+  name: 'weather_tool',
+  description: 'Returns the current weather. Always call this tool when asked about weather.',
+  inputSchema: z.object({}),
+  callback: async () => 'sunny',
+})
+
+export const echoTool = tool({
+  name: 'echo_tool',
+  description: 'Echoes back the given message. Always call this tool when asked to echo.',
+  inputSchema: z.object({ message: z.string().describe('The message to echo') }),
+  callback: async ({ message }) => `Echo: ${message}`,
+})

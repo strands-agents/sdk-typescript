@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import { z } from 'zod'
 import { Agent } from '../../agent/agent.js'
+import { BeforeInvocationEvent } from '../../hooks/events.js'
 import type { MultiAgentInput } from '../multiagent.js'
 import { MockMessageModel } from '../../__fixtures__/mock-message-model.js'
 import { collectGenerator } from '../../__fixtures__/model-test-helpers.js'
@@ -132,6 +133,34 @@ describe('AgentNode', () => {
       const timedNode = new AgentNode({ agent, timeout: Infinity })
       expect(timedNode.timeout).toBe(Infinity)
     })
+
+    it('defaults preserveContext to false', () => {
+      expect(node.preserveContext).toBe(false)
+    })
+
+    it('stores the preserveContext flag when provided', () => {
+      const preserveContextNode = new AgentNode({ agent, preserveContext: true })
+      expect(preserveContextNode.preserveContext).toBe(true)
+    })
+
+    it('throws when preserveContext is set with a non-Agent InvokableAgent', () => {
+      const customAgent = {
+        id: 'custom',
+        async invoke() {
+          throw new Error('not used')
+        },
+        // eslint-disable-next-line require-yield
+        async *stream() {
+          throw new Error('not used')
+        },
+        addHook() {
+          return () => {}
+        },
+      }
+      expect(() => new AgentNode({ agent: customAgent, preserveContext: true })).toThrow(
+        /preserveContext=true requires an Agent/
+      )
+    })
   })
 
   describe('handle', () => {
@@ -169,6 +198,39 @@ describe('AgentNode', () => {
 
       expect(agent.messages).toStrictEqual(messagesBefore)
       expect(agent.appState.getAll()).toStrictEqual(stateBefore)
+    })
+
+    it('retains agent messages across executions when preserveContext is true', async () => {
+      const model = new MockMessageModel().addTurn(new TextBlock('reply-1')).addTurn(new TextBlock('reply-2'))
+      const preserveContextAgent = new Agent({ model, printer: false, id: 'preserve-context-agent' })
+      const preserveContextNode = new AgentNode({ agent: preserveContextAgent, preserveContext: true })
+      const preserveContextState = new MultiAgentState({ nodeIds: ['preserve-context-agent'] })
+
+      await collectGenerator(preserveContextNode.stream([new TextBlock('first')], preserveContextState))
+      const messagesAfterFirst = preserveContextAgent.messages.length
+      expect(messagesAfterFirst).toBeGreaterThan(0)
+
+      await collectGenerator(preserveContextNode.stream([new TextBlock('second')], preserveContextState))
+
+      expect(preserveContextAgent.messages.length).toBeGreaterThan(messagesAfterFirst)
+    })
+
+    it('retains appState mutations across executions when preserveContext is true', async () => {
+      const model = new MockMessageModel().addTurn(new TextBlock('reply-1')).addTurn(new TextBlock('reply-2'))
+      const preserveContextAgent = new Agent({ model, printer: false, id: 'preserve-context-agent' })
+      // Hook bumps a counter on appState every time the agent is invoked.
+      preserveContextAgent.addHook(BeforeInvocationEvent, (event) => {
+        const count = event.agent.appState.get<{ count: number }>('count') ?? 0
+        event.agent.appState.set('count', count + 1)
+      })
+      const preserveContextNode = new AgentNode({ agent: preserveContextAgent, preserveContext: true })
+      const preserveContextState = new MultiAgentState({ nodeIds: ['preserve-context-agent'] })
+
+      await collectGenerator(preserveContextNode.stream([new TextBlock('first')], preserveContextState))
+      expect(preserveContextAgent.appState.get<{ count: number }>('count')).toBe(1)
+
+      await collectGenerator(preserveContextNode.stream([new TextBlock('second')], preserveContextState))
+      expect(preserveContextAgent.appState.get<{ count: number }>('count')).toBe(2)
     })
 
     it('passes structuredOutputSchema from options to the agent', async () => {

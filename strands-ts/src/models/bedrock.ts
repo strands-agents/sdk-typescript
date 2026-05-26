@@ -10,6 +10,8 @@
 import {
   BedrockRuntimeClient,
   type BedrockRuntimeClientConfig,
+  type CachePointBlock as BedrockCachePointBlock,
+  type CacheTTL as BedrockSdkCacheTTL,
   type ContentBlock as BedrockContentBlock,
   type ContentBlockDeltaEvent as BedrockContentBlockDeltaEvent,
   type ContentBlockStartEvent as BedrockContentBlockStartEvent,
@@ -126,6 +128,34 @@ const DEFAULT_REDACT_INPUT_MESSAGE = '[User input redacted.]'
 const DEFAULT_REDACT_OUTPUT_MESSAGE = '[Assistant output redacted.]'
 
 /**
+ * TTL durations accepted by Bedrock for prompt-cache checkpoints.
+ *
+ * Bedrock currently accepts `'5m'` (default) and `'1h'`. The `(string & {})` branch keeps
+ * autocomplete on the known values while letting callers pass any string forward — Bedrock
+ * validates the value server-side and rejects unsupported values with `ValidationException`,
+ * so this stays correct as AWS adds new TTL values without an SDK update.
+ *
+ * Bedrock also requires checkpoint TTLs to be **non-increasing** across
+ * `toolConfig` → system → messages — setting a longer TTL on a later checkpoint than an
+ * earlier one will be rejected by the service.
+ *
+ * @see https://docs.aws.amazon.com/bedrock/latest/APIReference/API_runtime_CachePointBlock.html
+ */
+export type BedrockCacheTTL = '5m' | '1h' | (string & {})
+
+/**
+ * Bedrock-specific prompt-caching configuration. Narrows the TTL fields onto the common
+ * {@link CacheConfig} for the Bedrock provider.
+ */
+export interface BedrockCacheConfig extends CacheConfig {
+  /** TTL applied to the auto-injected cache point appended after `toolConfig.tools`. */
+  toolsTTL?: BedrockCacheTTL
+
+  /** TTL applied to the auto-injected cache point appended to the last user message. */
+  messagesTTL?: BedrockCacheTTL
+}
+
+/**
  * Redaction configuration for Bedrock guardrails.
  * Controls whether and how blocked content is replaced.
  */
@@ -238,7 +268,7 @@ export interface BedrockModelConfig extends BaseModelConfig {
    *
    * @see https://docs.aws.amazon.com/bedrock/latest/userguide/prompt-caching.html
    */
-  cacheConfig?: CacheConfig
+  cacheConfig?: BedrockCacheConfig
 
   /**
    * Additional fields to include in the Bedrock request.
@@ -679,7 +709,13 @@ export class BedrockModel extends Model<BedrockModelConfig> {
       )
 
       if (this._shouldEnableCaching()) {
-        tools.push({ cachePoint: { type: 'default' } })
+        const cachePoint: BedrockCachePointBlock = { type: 'default' }
+        const ttl = this._config.cacheConfig?.toolsTTL
+        if (ttl !== undefined) {
+          // Bedrock validates TTL values server-side, so accept any string here.
+          cachePoint.ttl = ttl as BedrockSdkCacheTTL
+        }
+        tools.push({ cachePoint })
       }
 
       const toolConfig: ToolConfiguration = {
@@ -835,7 +871,13 @@ export class BedrockModel extends Model<BedrockModelConfig> {
     if (lastUserIdx !== null) {
       const lastMsg = messages[lastUserIdx]
       if (lastMsg && lastMsg.content) {
-        lastMsg.content.push({ cachePoint: { type: 'default' } })
+        const cachePoint: BedrockCachePointBlock = { type: 'default' }
+        const ttl = this._config.cacheConfig?.messagesTTL
+        if (ttl !== undefined) {
+          // Bedrock validates TTL values server-side, so accept any string here.
+          cachePoint.ttl = ttl as BedrockSdkCacheTTL
+        }
+        lastMsg.content.push({ cachePoint })
         logger.debug(`msg_idx=<${lastUserIdx}> | added cache point to last user message`)
       }
     }
@@ -1040,8 +1082,14 @@ export class BedrockModel extends Model<BedrockModelConfig> {
         }
       }
 
-      case 'cachePointBlock':
-        return { cachePoint: { type: block.cacheType } }
+      case 'cachePointBlock': {
+        const cachePoint: BedrockCachePointBlock = { type: block.cacheType }
+        if (block.ttl !== undefined) {
+          // Bedrock validates TTL values server-side, so accept any string here.
+          cachePoint.ttl = block.ttl as BedrockSdkCacheTTL
+        }
+        return { cachePoint }
+      }
 
       case 'imageBlock':
         return {

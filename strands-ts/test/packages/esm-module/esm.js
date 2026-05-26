@@ -10,6 +10,19 @@ import { fileEditor } from '@strands-agents/sdk/vended-tools/file-editor'
 import { httpRequest } from '@strands-agents/sdk/vended-tools/http-request'
 import { bash } from '@strands-agents/sdk/vended-tools/bash'
 
+import {
+  bash as barrelBash,
+  fileEditor as barrelFileEditor,
+  httpRequest as barrelHttpRequest,
+  notebook as barrelNotebook,
+} from '@strands-agents/sdk/vended-tools'
+
+import {
+  AgentSkills,
+  ContextOffloader,
+  InMemoryStorage,
+} from '@strands-agents/sdk/vended-plugins'
+
 // Verify model subpath exports
 import { BedrockModel as BedrockFromSubpath } from '@strands-agents/sdk/models/bedrock'
 import { OpenAIModel } from '@strands-agents/sdk/models/openai'
@@ -110,3 +123,15 @@ if (BedrockFromSubpath !== BedrockModel) {
   throw new Error('BedrockModel from subpath should match main export')
 }
 console.log('✓ Model subpath exports verified')
+
+// Verify barrel exports match individual subpath exports
+if (barrelBash !== bash || barrelFileEditor !== fileEditor || barrelHttpRequest !== httpRequest || barrelNotebook !== notebook) {
+  throw new Error('Barrel vended-tools exports do not match individual subpath exports')
+}
+console.log('✓ Barrel vended-tools exports verified')
+
+// Verify barrel vended-plugins exports are constructible
+if (typeof AgentSkills !== 'function' || typeof ContextOffloader !== 'function' || typeof InMemoryStorage !== 'function') {
+  throw new Error('Barrel vended-plugins exports are not constructible')
+}
+console.log('✓ Barrel vended-plugins exports verified')

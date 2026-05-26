@@ -736,6 +736,67 @@ describe('BedrockModel', () => {
         modelId: expect.any(String),
       })
     })
+
+    it('preserves ttl on user-supplied cache point blocks in messages', async () => {
+      const provider = new BedrockModel()
+      const messages = [
+        new Message({
+          role: 'user',
+          content: [
+            new TextBlock('Message with 1h cache point'),
+            new CachePointBlock({ cacheType: 'default', ttl: '1h' }),
+          ],
+        }),
+      ]
+
+      collectIterator(provider.stream(messages))
+
+      expect(mockConverseStreamCommand).toHaveBeenLastCalledWith({
+        messages: [
+          {
+            role: 'user',
+            content: [{ text: 'Message with 1h cache point' }, { cachePoint: { type: 'default', ttl: '1h' } }],
+          },
+        ],
+        modelId: expect.any(String),
+      })
+    })
+
+    it('preserves ttl on cache point blocks in system prompt', async () => {
+      const provider = new BedrockModel()
+      const messages = [new Message({ role: 'user', content: [new TextBlock('Hello')] })]
+      const options: StreamOptions = {
+        systemPrompt: [
+          new TextBlock('You are a helpful assistant'),
+          new CachePointBlock({ cacheType: 'default', ttl: '5m' }),
+        ],
+      }
+
+      collectIterator(provider.stream(messages, options))
+
+      const call = mockConverseStreamCommand.mock.lastCall?.[0]
+      expect(call?.system).toStrictEqual([
+        { text: 'You are a helpful assistant' },
+        { cachePoint: { type: 'default', ttl: '5m' } },
+      ])
+    })
+
+    it('forwards arbitrary ttl strings without client-side validation (Bedrock validates server-side)', async () => {
+      const provider = new BedrockModel()
+      const messages = [
+        new Message({
+          role: 'user',
+          content: [new TextBlock('Hello'), new CachePointBlock({ cacheType: 'default', ttl: '2h' })],
+        }),
+      ]
+
+      collectIterator(provider.stream(messages))
+
+      const call = mockConverseStreamCommand.mock.lastCall?.[0]
+      const userMsg = call?.messages?.[0]
+      const lastBlock = userMsg?.content?.[userMsg.content.length - 1]
+      expect(lastBlock).toStrictEqual({ cachePoint: { type: 'default', ttl: '2h' } })
+    })
   })
 
   describe.each([
@@ -1563,6 +1624,108 @@ describe('BedrockModel', () => {
       const assistantMsg = call?.messages?.[1]
       const assistantLastBlock = assistantMsg?.content?.[assistantMsg.content.length - 1]
       expect(assistantLastBlock).not.toStrictEqual({ cachePoint: { type: 'default' } })
+    })
+
+    it('propagates cacheConfig ttls independently to tools and last user message', async () => {
+      const provider = new BedrockModel({
+        cacheConfig: { strategy: 'auto', toolsTTL: '1h', messagesTTL: '5m' },
+      })
+      const messages = [new Message({ role: 'user', content: [new TextBlock('Hello')] })]
+      const options: StreamOptions = {
+        toolSpecs: [
+          {
+            name: 'calculator',
+            description: 'Calculate',
+            inputSchema: { type: 'object' },
+          },
+        ],
+      }
+
+      collectIterator(provider.stream(messages, options))
+
+      const call = mockConverseStreamCommand.mock.lastCall?.[0]
+      expect(call?.toolConfig?.tools).toStrictEqual([
+        {
+          toolSpec: {
+            name: 'calculator',
+            description: 'Calculate',
+            inputSchema: { json: { type: 'object' } },
+          },
+        },
+        { cachePoint: { type: 'default', ttl: '1h' } },
+      ])
+      const userMsg = call?.messages?.[0]
+      const lastBlock = userMsg?.content?.[userMsg.content.length - 1]
+      expect(lastBlock).toStrictEqual({ cachePoint: { type: 'default', ttl: '5m' } })
+    })
+
+    it('propagates only toolsTTL when messagesTTL is not set', async () => {
+      const provider = new BedrockModel({ cacheConfig: { strategy: 'auto', toolsTTL: '1h' } })
+      const messages = [new Message({ role: 'user', content: [new TextBlock('Hello')] })]
+      const options: StreamOptions = {
+        toolSpecs: [
+          {
+            name: 'calculator',
+            description: 'Calculate',
+            inputSchema: { type: 'object' },
+          },
+        ],
+      }
+
+      collectIterator(provider.stream(messages, options))
+
+      const call = mockConverseStreamCommand.mock.lastCall?.[0]
+      const toolsLast = call?.toolConfig?.tools?.[call.toolConfig.tools.length - 1]
+      expect(toolsLast).toStrictEqual({ cachePoint: { type: 'default', ttl: '1h' } })
+      const userMsg = call?.messages?.[0]
+      const lastBlock = userMsg?.content?.[userMsg.content.length - 1]
+      expect(lastBlock).toStrictEqual({ cachePoint: { type: 'default' } })
+    })
+
+    it('propagates only messagesTTL when toolsTTL is not set', async () => {
+      const provider = new BedrockModel({ cacheConfig: { strategy: 'auto', messagesTTL: '1h' } })
+      const messages = [new Message({ role: 'user', content: [new TextBlock('Hello')] })]
+      const options: StreamOptions = {
+        toolSpecs: [
+          {
+            name: 'calculator',
+            description: 'Calculate',
+            inputSchema: { type: 'object' },
+          },
+        ],
+      }
+
+      collectIterator(provider.stream(messages, options))
+
+      const call = mockConverseStreamCommand.mock.lastCall?.[0]
+      const toolsLast = call?.toolConfig?.tools?.[call.toolConfig.tools.length - 1]
+      expect(toolsLast).toStrictEqual({ cachePoint: { type: 'default' } })
+      const userMsg = call?.messages?.[0]
+      const lastBlock = userMsg?.content?.[userMsg.content.length - 1]
+      expect(lastBlock).toStrictEqual({ cachePoint: { type: 'default', ttl: '1h' } })
+    })
+
+    it('omits ttl on auto-injected cache points when no ttl is set', async () => {
+      const provider = new BedrockModel({ cacheConfig: { strategy: 'auto' } })
+      const messages = [new Message({ role: 'user', content: [new TextBlock('Hello')] })]
+      const options: StreamOptions = {
+        toolSpecs: [
+          {
+            name: 'calculator',
+            description: 'Calculate',
+            inputSchema: { type: 'object' },
+          },
+        ],
+      }
+
+      collectIterator(provider.stream(messages, options))
+
+      const call = mockConverseStreamCommand.mock.lastCall?.[0]
+      const toolsLast = call?.toolConfig?.tools?.[call.toolConfig.tools.length - 1]
+      expect(toolsLast).toStrictEqual({ cachePoint: { type: 'default' } })
+      const userMsg = call?.messages?.[0]
+      const lastBlock = userMsg?.content?.[userMsg.content.length - 1]
+      expect(lastBlock).toStrictEqual({ cachePoint: { type: 'default' } })
     })
 
     it('does not mutate the original messages array', async () => {

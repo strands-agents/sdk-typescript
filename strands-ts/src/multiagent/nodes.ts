@@ -173,13 +173,29 @@ export interface AgentNodeOptions {
    * this deadline.
    */
   timeout?: number
+  /**
+   * When `true`, the wrapped agent accumulates state (messages, appState,
+   * modelState) across node executions. Useful for graph patterns where a
+   * node is revisited and should build on its previous work (e.g., an
+   * analyst that accumulates findings, or iterative refinement).
+   *
+   * When `false` (default), the agent's state is snapshotted before each
+   * execution and restored in `finally`, so the node is stateless across
+   * visits.
+   *
+   * Throws at construction time when set to `true` with a non-`Agent`
+   * `InvokableAgent`, since snapshot/restore only applies to `Agent` instances.
+   */
+  preserveContext?: boolean
 }
 
 /**
  * Node that wraps an {@link InvokableAgent} instance for multi-agent orchestration.
  *
- * Each execution is isolated. When the wrapped agent is an {@link Agent} instance,
- * its internal state is snapshot/restored so it remains unchanged after the node completes.
+ * By default, when the wrapped agent is an {@link Agent} instance, its internal
+ * state is snapshot/restored around each execution so it remains unchanged
+ * after the node completes. Pass `preserveContext: true` to opt out and let the
+ * wrapped agent accumulate state across node executions.
  */
 export class AgentNode extends Node {
   readonly type = 'agentNode' as const
@@ -190,9 +206,14 @@ export class AgentNode extends Node {
    * See {@link AgentNodeOptions.timeout}.
    */
   readonly timeout?: number
+  /**
+   * Whether the wrapped agent retains state across node executions.
+   * See {@link AgentNodeOptions.preserveContext}.
+   */
+  readonly preserveContext: boolean
 
   constructor(options: AgentNodeOptions) {
-    const { agent, timeout, ...config } = options
+    const { agent, timeout, preserveContext, ...config } = options
 
     super(agent.id, {
       ...config,
@@ -206,6 +227,12 @@ export class AgentNode extends Node {
       }
       this.timeout = timeout
     }
+    if (preserveContext && !(agent instanceof Agent)) {
+      throw new Error(
+        `node_id=<${agent.id}> | preserveContext=true requires an Agent instance; non-Agent InvokableAgents cannot be snapshotted`
+      )
+    }
+    this.preserveContext = preserveContext ?? false
   }
 
   get agent(): InvokableAgent {
@@ -231,10 +258,14 @@ export class AgentNode extends Node {
     const invocationState: InvocationState = options?.invocationState ?? {}
 
     // Only Agent instances support snapshot/restore for state isolation.
+    // When `preserveContext` is set, skip the snapshot/restore cycle so the agent
+    // accumulates state across node executions.
     const isAgent = this._agent instanceof Agent
-    const preRunSnapshot = isAgent ? this._agent.takeSnapshot({ preset: 'session' }) : undefined
+    const preRunSnapshot =
+      !this.preserveContext && isAgent ? this._agent.takeSnapshot({ preset: 'session' }) : undefined
 
     // Rehydrate agent state from a prior INTERRUPTED run (messages + interrupt state).
+    // Independent of `preserveContext`: a paused run always resumes from where it left off.
     const nodeState = state.node(this.id)
     if (isAgent && nodeState?.interruptedSnapshot) {
       this._agent.loadSnapshot(nodeState.interruptedSnapshot)

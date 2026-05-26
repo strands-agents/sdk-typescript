@@ -1,24 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { Agent, BeforeToolCallEvent, tool } from '@strands-agents/sdk'
-import type { AgentResult, InterruptResponseContentData, JSONValue } from '@strands-agents/sdk'
 import { z } from 'zod'
 import { bedrock } from './__fixtures__/model-providers.js'
-
-// Tool that returns a static time value
-const timeTool = tool({
-  name: 'time_tool',
-  description: 'Returns the current time',
-  inputSchema: z.object({}),
-  callback: async () => '12:00',
-})
-
-// Tool that returns a static weather value
-const weatherTool = tool({
-  name: 'weather_tool',
-  description: 'Returns the current weather',
-  inputSchema: z.object({}),
-  callback: async () => 'sunny',
-})
+import { resumeUntilDone, timeTool, weatherTool } from './__fixtures__/test-helpers.js'
 
 // Tool that interrupts to ask for the time
 const interruptTimeTool = tool({
@@ -29,29 +13,6 @@ const interruptTimeTool = tool({
     return context!.interrupt({ name: 'test_interrupt', reason: 'need time' }) as string
   },
 })
-
-/**
- * Resumes an interrupted agent by responding to all pending interrupts,
- * looping until the agent completes or a max iteration limit is reached.
- */
-async function resumeUntilDone(
-  agent: Agent,
-  result: AgentResult,
-  respond: (interrupt: { id: string; name: string; reason?: unknown }) => JSONValue,
-  maxRounds = 10
-): Promise<AgentResult> {
-  let current = result
-  for (let i = 0; i < maxRounds && current.stopReason === 'interrupt'; i++) {
-    const responses: InterruptResponseContentData[] = current.interrupts!.map((interrupt) => ({
-      interruptResponse: {
-        interruptId: interrupt.id,
-        response: respond(interrupt),
-      },
-    }))
-    current = await agent.invoke(responses)
-  }
-  return current
-}
 
 describe.skipIf(bedrock.skip)('Interrupts', () => {
   describe('hook interrupts', () => {

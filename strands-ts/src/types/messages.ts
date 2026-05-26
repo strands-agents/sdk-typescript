@@ -538,6 +538,15 @@ export interface CachePointBlockData {
    * The cache type. Currently only 'default' is supported.
    */
   cacheType: 'default'
+
+  /**
+   * Optional TTL for the cache entry. When omitted, the provider's default TTL is used.
+   *
+   * The accepted value space is provider-specific. For example, the Bedrock provider only
+   * accepts the values defined by `BedrockCacheTTL` (`'5m'` and `'1h'`). Other providers
+   * may accept different values or ignore this field.
+   */
+  ttl?: string
 }
 
 /**
@@ -555,8 +564,17 @@ export class CachePointBlock implements CachePointBlockData, JSONSerializable<{ 
    */
   readonly cacheType: 'default'
 
+  /**
+   * Optional TTL for the cache entry. See {@link CachePointBlockData.ttl} for the
+   * provider-specific value space.
+   */
+  readonly ttl?: string
+
   constructor(data: CachePointBlockData) {
     this.cacheType = data.cacheType
+    if (data.ttl !== undefined) {
+      this.ttl = data.ttl
+    }
   }
 
   /**
@@ -567,6 +585,7 @@ export class CachePointBlock implements CachePointBlockData, JSONSerializable<{ 
     return {
       cachePoint: {
         cacheType: this.cacheType,
+        ...(this.ttl !== undefined && { ttl: this.ttl }),
       },
     }
   }
