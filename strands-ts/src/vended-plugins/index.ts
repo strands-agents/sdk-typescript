@@ -3,7 +3,7 @@
  *
  * Provides a single import path for consumers who want all built-in plugins:
  * ```typescript
- * import { AgentSkills, ContextOffloader, GoalPlugin, InMemoryStorage } from '@strands-agents/sdk/vended-plugins'
+ * import { AgentSkills, ContextOffloader, GoalLoop, InMemoryStorage } from '@strands-agents/sdk/vended-plugins'
  * ```
  */
 
