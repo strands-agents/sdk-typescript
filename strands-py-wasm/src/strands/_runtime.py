@@ -7,8 +7,8 @@ This module owns:
 * the per-Agent ``Store`` + ``Linker`` + ``Instance`` lifecycle
 * host-import callbacks (``tool-provider.call-tool``, ``host-log``)
 * the host-side ``tool-event-stream`` resource the wasm component drains
-* the async :class:`EventStream` wrapper that turns the sync wasm
-  ``read()`` call into an ``AsyncIterator`` for SDK callers
+* the async :class:`EventStream` wrapper that uses ``call_async`` to yield
+  back to the asyncio event loop while the guest awaits I/O
 
 External SDK code talks to ``_AgentRuntime`` and ``EventStream``; everything
 else (WASI setup, marshaling, resource bookkeeping) is private.
@@ -16,7 +16,6 @@ else (WASI setup, marshaling, resource bookkeeping) is private.
 
 from __future__ import annotations
 
-import asyncio
 import json
 import logging
 import os
@@ -77,6 +76,8 @@ def _get_engine() -> Engine:
         if _engine is None:
             cfg = Config()
             cfg.wasm_component_model = True
+            cfg.wasm_component_model_async = True
+            cfg.async_allow_sync = True
             _engine = Engine(cfg)
         return _engine
 
@@ -278,7 +279,7 @@ def _make_store_and_linker(
 
     linker = Linker(engine)
     linker.allow_shadowing = True
-    linker.add_wasip2()
+    linker.add_wasip2_async()
     linker.add_wasi_http_async()
     _register_imports(linker, agent, registry)
     return store, linker
@@ -287,9 +288,10 @@ def _make_store_and_linker(
 class EventStream:
     """Async iterator over guest-emitted :class:`StreamEvent` values.
 
-    Wraps the wasm-side ``[method]event-stream.read`` call. Each ``__anext__``
-    runs ``read`` on a worker thread so the asyncio loop stays responsive
-    while the guest blocks waiting for the next event.
+    Each ``__anext__`` uses ``call_async`` to drive the WASM guest's
+    ``event-stream.read`` export. This yields back to the asyncio event loop
+    while the guest awaits network I/O (model calls), enabling true
+    cooperative concurrency without thread pools.
     """
 
     def __init__(self, runtime: _AgentRuntime, handle: ResourceAny) -> None:
@@ -316,14 +318,13 @@ class EventStream:
 class _AgentRuntime:
     """Lazy wrapper around the wasm Agent resource for one ``strands.Agent``.
 
-    Construction is split across :meth:`__init__` (sync, cheap) and
-    :meth:`async_init` (drives the wasm constructor through ``call_async``).
-    Callers must await ``async_init`` before invoking any other method.
+    Uses ``call_async`` for all WASM function invocations so that I/O-bound
+    operations (HTTP calls to model providers) yield back to the asyncio
+    event loop via a socket-pair notification bridge.
     """
 
     def __init__(self, agent: Agent) -> None:
         self._agent = agent
-        self._lock = threading.Lock()
         self._tool_streams = _ToolStreamRegistry()
         self._store, self._linker = _make_store_and_linker(agent, self._tool_streams)
         self._instance = self._linker.instantiate(self._store, _get_component())
@@ -331,126 +332,77 @@ class _AgentRuntime:
         self._handle: ResourceAny | None = None
         self._current_response: ResourceAny | None = None
 
-    def init(self) -> None:
+    async def async_init(self) -> None:
         if self._handle is not None:
             return
-        # The bindgen AgentConfig is already wire-shape; pass through.
-        self._handle = self._funcs.constructor(self._store, self._agent._config)
+        self._handle = await self._funcs.constructor.call_async(self._store, self._agent._config)
         self._funcs.constructor.post_return(self._store)
 
-    async def async_init(self) -> None:
-        # Async hook so callers don't need to know construction is sync.
-        self.init()
-
     async def generate(self, args: _t.InvokeArgs) -> EventStream:
-        # Run sync wasm calls in a worker thread so the asyncio loop stays free.
-        loop = asyncio.get_running_loop()
-        return await loop.run_in_executor(None, self._generate_blocking, args)
-
-    def _generate_blocking(self, args: _t.InvokeArgs) -> EventStream:
-        with self._lock:
-            response_handle: ResourceAny = self._funcs.generate(self._store, self._handle, args)
-            self._funcs.generate.post_return(self._store)
-            self._current_response = response_handle
-            stream_handle: ResourceAny = self._funcs.events(self._store, response_handle)
-            self._funcs.events.post_return(self._store)
-            return EventStream(self, stream_handle)
+        response_handle: ResourceAny = await self._funcs.generate.call_async(
+            self._store, self._handle, args
+        )
+        self._funcs.generate.post_return(self._store)
+        self._current_response = response_handle
+        stream_handle: ResourceAny = await self._funcs.events.call_async(
+            self._store, response_handle
+        )
+        self._funcs.events.post_return(self._store)
+        return EventStream(self, stream_handle)
 
     def cancel(self) -> None:
-        with self._lock:
-            handle = self._current_response
-            if handle is None:
-                return
-            self._funcs.cancel(self._store, handle)
-            self._funcs.cancel.post_return(self._store)
+        handle = self._current_response
+        if handle is None:
+            return
+        self._funcs.cancel(self._store, handle)
+        self._funcs.cancel.post_return(self._store)
 
     async def respond(self, args: _t.RespondArgs) -> None:
-        loop = asyncio.get_running_loop()
-        await loop.run_in_executor(None, self._respond_blocking, args)
+        handle = self._current_response
+        if handle is None:
+            from . import StrandsError
 
-    def _respond_blocking(self, args: _t.RespondArgs) -> None:
-        with self._lock:
-            handle = self._current_response
-            if handle is None:
-                from . import StrandsError
-
-                raise StrandsError("respond() called with no in-flight invocation")
-            res = self._funcs.respond(self._store, handle, args)
-            self._funcs.respond.post_return(self._store)
+            raise StrandsError("respond() called with no in-flight invocation")
+        res = await self._funcs.respond.call_async(self._store, handle, args)
+        self._funcs.respond.post_return(self._store)
         _raise_on_err(res)
 
-    async def get_messages(self) -> list[_t.Message]:
-        loop = asyncio.get_running_loop()
-        return await loop.run_in_executor(None, self._get_messages_blocking)
-
-    def _get_messages_blocking(self) -> list[Any]:
-        with self._lock:
-            raw = self._funcs.get_messages(self._store, self._handle)
-            self._funcs.get_messages.post_return(self._store)
-        return raw  # wasmtime-py records expose the same kebab-case attrs as bindgen Message
+    async def get_messages(self) -> list[Any]:
+        raw = await self._funcs.get_messages.call_async(self._store, self._handle)
+        self._funcs.get_messages.post_return(self._store)
+        return raw
 
     async def set_messages(self, messages: Iterable[Any]) -> None:
-        # bindgen Message instances are already wire-shape; pass through.
         wit = list(messages)
-        loop = asyncio.get_running_loop()
-        await loop.run_in_executor(None, self._set_messages_blocking, wit)
-
-    def _set_messages_blocking(self, wit: list[Any]) -> None:
-        with self._lock:
-            res = self._funcs.set_messages(self._store, self._handle, wit)
-            self._funcs.set_messages.post_return(self._store)
+        res = await self._funcs.set_messages.call_async(self._store, self._handle, wit)
+        self._funcs.set_messages.post_return(self._store)
         _raise_on_err(res)
 
     async def get_app_state(self) -> dict[str, Any]:
-        loop = asyncio.get_running_loop()
-        return await loop.run_in_executor(None, self._get_app_state_blocking)
-
-    def _get_app_state_blocking(self) -> dict[str, Any]:
-        with self._lock:
-            raw = self._funcs.get_app_state(self._store, self._handle)
-            self._funcs.get_app_state.post_return(self._store)
+        raw = await self._funcs.get_app_state.call_async(self._store, self._handle)
+        self._funcs.get_app_state.post_return(self._store)
         return json.loads(raw) if raw else {}
 
     async def set_app_state(self, state: dict[str, Any]) -> None:
         payload = json.dumps(state)
-        loop = asyncio.get_running_loop()
-        await loop.run_in_executor(None, self._set_app_state_blocking, payload)
-
-    def _set_app_state_blocking(self, payload: str) -> None:
-        with self._lock:
-            res = self._funcs.set_app_state(self._store, self._handle, payload)
-            self._funcs.set_app_state.post_return(self._store)
+        res = await self._funcs.set_app_state.call_async(self._store, self._handle, payload)
+        self._funcs.set_app_state.post_return(self._store)
         _raise_on_err(res)
 
     async def get_model_state(self) -> dict[str, Any]:
-        loop = asyncio.get_running_loop()
-        return await loop.run_in_executor(None, self._get_model_state_blocking)
-
-    def _get_model_state_blocking(self) -> dict[str, Any]:
-        with self._lock:
-            raw = self._funcs.get_model_state(self._store, self._handle)
-            self._funcs.get_model_state.post_return(self._store)
+        raw = await self._funcs.get_model_state.call_async(self._store, self._handle)
+        self._funcs.get_model_state.post_return(self._store)
         return json.loads(raw) if raw else {}
 
     async def set_model_state(self, state: dict[str, Any]) -> None:
         payload = json.dumps(state)
-        loop = asyncio.get_running_loop()
-        await loop.run_in_executor(None, self._set_model_state_blocking, payload)
-
-    def _set_model_state_blocking(self, payload: str) -> None:
-        with self._lock:
-            res = self._funcs.set_model_state(self._store, self._handle, payload)
-            self._funcs.set_model_state.post_return(self._store)
+        res = await self._funcs.set_model_state.call_async(self._store, self._handle, payload)
+        self._funcs.set_model_state.post_return(self._store)
         _raise_on_err(res)
 
     async def event_stream_read(self, handle: ResourceAny) -> Variant | None:
-        loop = asyncio.get_running_loop()
-        return await loop.run_in_executor(None, self._event_stream_read_blocking, handle)
-
-    def _event_stream_read_blocking(self, handle: ResourceAny) -> Variant | None:
-        with self._lock:
-            raw = self._funcs.event_stream_read(self._store, handle)
-            self._funcs.event_stream_read.post_return(self._store)
+        raw = await self._funcs.event_stream_read.call_async(self._store, handle)
+        self._funcs.event_stream_read.post_return(self._store)
         return raw
 
 
