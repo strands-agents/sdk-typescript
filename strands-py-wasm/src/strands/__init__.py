@@ -1023,7 +1023,11 @@ class _AgentResultAccumulator:
             last_message=last,
             usage=stop.usage if stop is not None else None,
             metrics=None,
-            structured_output=(json.loads(stop.structured_output) if stop and stop.structured_output else None),
+            structured_output=(
+                json.loads(getattr(stop, "structured-output"))
+                if stop is not None and getattr(stop, "structured-output", None)
+                else None
+            ),
             interrupts=self._interrupts or None,
         )
 

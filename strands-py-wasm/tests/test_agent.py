@@ -1,6 +1,6 @@
 import pytest
 
-from strands import Agent, BedrockModel, StreamEvent, StreamEvent_Stop
+from strands import Agent, AgentResult, BedrockModel, StreamEvent, StreamEvent_Stop
 
 
 @pytest.fixture
@@ -11,6 +11,13 @@ def model():
 @pytest.fixture
 def agent(model):
     return Agent(model=model)
+
+
+@pytest.mark.asyncio
+async def test_invoke_async_hello_world(agent):
+    result = await agent.invoke_async("Say hello world")
+    assert isinstance(result, AgentResult)
+    assert "hello" in str(result).lower()
 
 
 @pytest.mark.asyncio
