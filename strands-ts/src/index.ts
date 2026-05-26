@@ -140,6 +140,9 @@ export type { ZodToolConfig } from './tools/zod-tool.js'
 // Tool factory function
 export { tool } from './tools/tool-factory.js'
 
+// McpTool implementation
+export { McpTool } from './tools/mcp-tool.js'
+
 // Streaming event types
 export type {
   Usage,
