@@ -95,6 +95,14 @@
     "./vended-plugins": {
       "types": "./dist/src/vended-plugins/index.d.ts",
       "default": "./dist/src/vended-plugins/index.js"
+    },
+    "./context-manager/compression": {
+      "types": "./dist/src/context-manager/compression/index.d.ts",
+      "default": "./dist/src/context-manager/compression/index.js"
+    },
+    "./context-manager/compression/pin-message": {
+      "types": "./dist/src/context-manager/compression/pin-message.d.ts",
+      "default": "./dist/src/context-manager/compression/pin-message.js"
     }
   },
   "scripts": {

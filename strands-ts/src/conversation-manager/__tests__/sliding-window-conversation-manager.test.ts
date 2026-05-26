@@ -1211,4 +1211,81 @@ describe('SlidingWindowConversationManager', () => {
       expect(mockAgent.messages).toHaveLength(2)
     })
   })
+
+  describe('protectedMessageRange', () => {
+    it('protects first N messages from trimming (positive)', async () => {
+      const manager = new SlidingWindowConversationManager({ windowSize: 4, protectedMessageRange: 2 })
+      const mockAgent = createMockAgent({
+        messages: [
+          new Message({ role: 'user', content: [new TextBlock('first')] }),
+          new Message({ role: 'assistant', content: [new TextBlock('second')] }),
+          new Message({ role: 'user', content: [new TextBlock('third')] }),
+          new Message({ role: 'assistant', content: [new TextBlock('fourth')] }),
+          new Message({ role: 'user', content: [new TextBlock('fifth')] }),
+          new Message({ role: 'assistant', content: [new TextBlock('sixth')] }),
+        ],
+      }) as unknown as Agent
+
+      await triggerSlidingWindow(manager, mockAgent)
+
+      const texts = mockAgent.messages.map((m) => (m.content[0] as TextBlock).text)
+      expect(texts).toContain('first')
+      expect(texts).toContain('second')
+    })
+
+    it('protects last N messages from trimming (negative)', async () => {
+      const manager = new SlidingWindowConversationManager({ windowSize: 4, protectedMessageRange: -2 })
+      const mockAgent = createMockAgent({
+        messages: [
+          new Message({ role: 'user', content: [new TextBlock('first')] }),
+          new Message({ role: 'assistant', content: [new TextBlock('second')] }),
+          new Message({ role: 'user', content: [new TextBlock('third')] }),
+          new Message({ role: 'assistant', content: [new TextBlock('fourth')] }),
+          new Message({ role: 'user', content: [new TextBlock('fifth')] }),
+          new Message({ role: 'assistant', content: [new TextBlock('sixth')] }),
+        ],
+      }) as unknown as Agent
+
+      await triggerSlidingWindow(manager, mockAgent)
+
+      const texts = mockAgent.messages.map((m) => (m.content[0] as TextBlock).text)
+      expect(texts).toContain('fifth')
+      expect(texts).toContain('sixth')
+    })
+
+    it('returns false when all messages in trim range are protected', () => {
+      const manager = new SlidingWindowConversationManager({ windowSize: 2, protectedMessageRange: 4 })
+      const mockAgent = createMockAgent({
+        messages: [
+          new Message({ role: 'user', content: [new TextBlock('a')] }),
+          new Message({ role: 'assistant', content: [new TextBlock('b')] }),
+          new Message({ role: 'user', content: [new TextBlock('c')] }),
+          new Message({ role: 'assistant', content: [new TextBlock('d')] }),
+        ],
+      }) as unknown as Agent
+
+      const result = manager.reduce({ agent: mockAgent, model: {} as any })
+      expect(result).toBe(false)
+    })
+
+    it('pinned message in middle of window survives trimming', async () => {
+      const { pinMessage } = await import('../../context-manager/compression/pin-message.js')
+      const manager = new SlidingWindowConversationManager({ windowSize: 4 })
+      const mockAgent = createMockAgent({
+        messages: [
+          new Message({ role: 'user', content: [new TextBlock('first')] }),
+          new Message({ role: 'assistant', content: [new TextBlock('second')] }),
+          pinMessage(new Message({ role: 'user', content: [new TextBlock('pinned-middle')] })),
+          new Message({ role: 'assistant', content: [new TextBlock('fourth')] }),
+          new Message({ role: 'user', content: [new TextBlock('fifth')] }),
+          new Message({ role: 'assistant', content: [new TextBlock('sixth')] }),
+        ],
+      }) as unknown as Agent
+
+      await triggerSlidingWindow(manager, mockAgent)
+
+      const texts = mockAgent.messages.map((m) => (m.content[0] as TextBlock).text)
+      expect(texts).toContain('pinned-middle')
+    })
+  })
 })
