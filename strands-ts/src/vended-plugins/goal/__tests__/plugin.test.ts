@@ -206,34 +206,41 @@ describe('GoalLoop', () => {
     })
 
     it('honours timeout by terminating before next validate', async () => {
-      const model = new MockMessageModel()
-        .addTurn({ type: 'textBlock', text: 'a' })
-        .addTurn({ type: 'textBlock', text: 'b' })
+      vi.useFakeTimers()
+      try {
+        const model = new MockMessageModel()
+          .addTurn({ type: 'textBlock', text: 'a' })
+          .addTurn({ type: 'textBlock', text: 'b' })
 
-      let n = 0
-      const plugin = new GoalLoop({
-        name: 'fn-timeout',
-        validate: async () => {
-          n++
-          if (n === 1) {
-            await new Promise((r) => setTimeout(r, 30))
-            return { passed: false, feedback: 'try again' } satisfies ValidationOutcome
-          }
-          return true
-        },
-        timeout: 10,
-        maxAttempts: 5,
-      })
-      const agent = new Agent({ model, plugins: [plugin], printer: false })
+        let attemptCount = 0
+        const plugin = new GoalLoop({
+          name: 'fn-timeout',
+          validate: async () => {
+            attemptCount++
+            if (attemptCount === 1) {
+              await new Promise((resolve) => setTimeout(resolve, 30))
+              return { passed: false, feedback: 'try again' } satisfies ValidationOutcome
+            }
+            return true
+          },
+          timeout: 10,
+          maxAttempts: 5,
+        })
+        const agent = new Agent({ model, plugins: [plugin], printer: false })
 
-      await agent.invoke('go')
+        const invokePromise = agent.invoke('go')
+        await vi.runAllTimersAsync()
+        await invokePromise
 
-      expect(plugin.lastResult).toEqual({
-        passed: false,
-        stopReason: 'timeout',
-        attempts: [{ attempt: 1, passed: false, feedback: 'try again' }],
-      })
-      expect(model.callCount).toBe(2)
+        expect(plugin.lastResult).toEqual({
+          passed: false,
+          stopReason: 'timeout',
+          attempts: [{ attempt: 1, passed: false, feedback: 'try again' }],
+        })
+        expect(model.callCount).toBe(2)
+      } finally {
+        vi.useRealTimers()
+      }
     })
   })
 
@@ -593,13 +600,14 @@ describe('judge helpers', () => {
 // a turn from the model, returning a `strands_structured_output` tool use that the
 // agent loop validates against JUDGE_OUTCOME_SCHEMA.
 describe('GoalLoop natural-language judge', () => {
+  let judgeCallCount = 0
   function buildJudgeTurn(passed: boolean, feedback?: string): Parameters<MockMessageModel['addTurn']> {
     const input = feedback !== undefined ? { passed, feedback } : { passed }
     return [
       {
         type: 'toolUseBlock',
         name: 'strands_structured_output',
-        toolUseId: `judge-${Math.random().toString(36).slice(2, 8)}`,
+        toolUseId: `judge-${++judgeCallCount}`,
         input,
       },
     ]
@@ -619,9 +627,11 @@ describe('GoalLoop natural-language judge', () => {
 
     await agent.invoke('explain rainbows')
 
-    expect(plugin.lastResult?.passed).toBe(true)
-    expect(plugin.lastResult?.stopReason).toBe('satisfied')
-    expect(plugin.lastResult?.attempts).toHaveLength(1)
+    expect(plugin.lastResult).toEqual({
+      passed: true,
+      stopReason: 'satisfied',
+      attempts: [{ attempt: 1, passed: true }],
+    })
   })
 
   it('feeds judge feedback back to the host agent', async () => {

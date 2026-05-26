@@ -140,11 +140,14 @@ export interface GoalLoopOptions {
    *
    * When `false` (Ralph-Wiggum mode), each failed attempt restores the agent's
    * full model-visible session (messages, systemPrompt, modelState, interrupts)
-   * to its initial post-input state, then re-runs the goal with the latest
-   * validator feedback as a fresh user message. The agent never sees its own
-   * prior attempts — including via server-side conversation chaining (e.g.
-   * OpenAI's `previous_response_id`). Only `appState` accumulates across
-   * attempts, since that's plugin scratch space invisible to the model.
+   * to the state captured immediately before attempt 1's first model call,
+   * then re-runs the goal with the latest validator feedback as a fresh user
+   * message. The snapshot is taken *after* any conversation manager or other
+   * pre-model hook has run, so retries restore to what the model actually saw,
+   * not the raw user input. The agent never sees its own prior attempts —
+   * including via server-side conversation chaining (e.g. OpenAI's
+   * `previous_response_id`). Only `appState` accumulates across attempts,
+   * since that's plugin scratch space invisible to the model.
    *
    * @defaultValue true
    */
@@ -183,6 +186,13 @@ interface RunState {
    */
   initialSnapshot?: Snapshot
 }
+
+/**
+ * Tracks which agents already have a GoalLoop attached so a second attachment
+ * fails loudly instead of silently overwriting `event.resume` on every After
+ * hook (last-writer-wins).
+ */
+const agentsWithGoalLoop = new WeakSet<LocalAgent>()
 
 /**
  * Iterative-refinement plugin. Construct a separate `GoalLoop` for each `Agent`
@@ -238,6 +248,16 @@ export class GoalLoop implements Plugin {
     if (this._initialised) {
       throw new Error(`${this.name}: GoalLoop instances cannot be shared across agents; construct one per agent`)
     }
+    // Two GoalLoops on the same agent both register an AfterInvocationEvent
+    // hook and both write `event.resume` — last writer wins, so one's feedback
+    // would be silently dropped. Compose constraints in a single validator
+    // function instead.
+    if (agentsWithGoalLoop.has(agent)) {
+      throw new Error(
+        `${this.name}: another GoalLoop is already attached to this agent; only one GoalLoop is supported per agent`
+      )
+    }
+    agentsWithGoalLoop.add(agent)
     this._initialised = true
     this._validator = this._buildValidator(this._validate, agent)
 
