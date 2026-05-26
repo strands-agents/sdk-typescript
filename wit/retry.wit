@@ -17,13 +17,13 @@ interface retry {
   }
 
   /// Fixed delay between attempts.
-  record constant-backoff-config {
+  record constant-backoff {
     /// Delay returned for every retry.
     delay: duration,
   }
 
   /// Delay grows linearly with attempt number.
-  record linear-backoff-config {
+  record linear-backoff {
     /// Base delay. Delay on attempt N is `base * N`.
     base: duration,
     /// Upper bound applied before jitter.
@@ -33,7 +33,7 @@ interface retry {
   }
 
   /// Delay grows exponentially with attempt number.
-  record exponential-backoff-config {
+  record exponential-backoff {
     /// Base delay on the first retry.
     base: duration,
     /// Upper bound applied before jitter.
@@ -47,11 +47,11 @@ interface retry {
   /// Backoff curve applied between attempts.
   variant backoff-strategy {
     /// Fixed delay.
-    constant(constant-backoff-config),
+    constant(constant-backoff),
     /// Linear growth.
-    linear(linear-backoff-config),
+    linear(linear-backoff),
     /// Exponential growth.
-    exponential(exponential-backoff-config),
+    exponential(exponential-backoff),
   }
 
   /// A single retry strategy. Default is exponential backoff, full jitter, 6 attempts.

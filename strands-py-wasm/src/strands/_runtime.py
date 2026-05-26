@@ -36,7 +36,7 @@ from wasmtime.component import (
     Variant,
 )
 
-from . import _generated as _t
+from . import types as _t
 
 if TYPE_CHECKING:
     from . import Agent
@@ -94,24 +94,23 @@ _tool_stream_resource_type: ResourceType | None = None
 
 
 class _HostToolEventStream:
-    """Host-side tool-event-stream backing a single ``call-tool`` invocation.
+    """Host-side queue backing a single ``call-tool`` invocation.
 
-    Holds a queue of WIT ``tool-stream-event`` Variants. ``read()`` returns
-    them one at a time, then ``None`` after the terminal ``complete`` /
-    ``error`` event has been delivered.
+    Holds a queue of ``tool-stream-event`` payloads. ``read()`` returns them
+    one at a time, then ``None`` after the terminal event is delivered.
     """
 
     def __init__(self) -> None:
-        self._events: deque[Variant] = deque()
+        self._events: deque[Any] = deque()
         self._closed = False
 
-    def push(self, event: Variant) -> None:
+    def push(self, event: Any) -> None:
         self._events.append(event)
 
     def close(self) -> None:
         self._closed = True
 
-    def read(self) -> Variant | None:
+    def read(self) -> Any:
         if self._events:
             return self._events.popleft()
         return None
@@ -165,11 +164,12 @@ def _make_tool_call_handler(agent: Agent, registry: _ToolStreamRegistry):
             content_list = tool.invoke(raw_input)
         except Exception as exc:  # noqa: BLE001  surface any tool exception as a tool-error
             logger.exception("tool %r raised; surfacing as tool-error to guest", name)
-            stream.push(_t.ToolStreamEvent.error(_t.ToolError.execution_failed(str(exc))))
+            # tool-stream-event is untagged: push the bare arm payload.
+            stream.push(_t.ToolError.ExecutionFailed(str(exc)))
             stream.close()
         else:
-            # content_list items are already ToolResultContent wire variants.
-            stream.push(_t.ToolStreamEvent.complete(content_list))
+            # content_list is already a list[ToolResultContent].
+            stream.push(content_list)
             stream.close()
 
         # Register, then hand ownership to the guest. On failure, drop the rep
@@ -212,12 +212,14 @@ def _make_tool_event_stream_read(registry: _ToolStreamRegistry):
         rep = host.rep
         stream = registry.lookup(rep)
         return stream.read()
+
     return _tool_event_stream_read
 
 
 def _trap(name: str):
     def _f(*_a, **_k):
         raise RuntimeError(f"host import not implemented: {name}")
+
     return _f
 
 
@@ -248,8 +250,14 @@ def _register_imports(linker: Linker, agent: Agent, registry: _ToolStreamRegistr
             ns.add_func("count-tokens", _trap("model-provider.count-tokens"))
 
         with root.add_instance("strands:agent/snapshot-storage@0.1.0") as ns:
-            for fname in ("save-snapshot", "load-snapshot", "list-snapshot-ids",
-                          "delete-session", "load-manifest", "save-manifest"):
+            for fname in (
+                "save-snapshot",
+                "load-snapshot",
+                "list-snapshot-ids",
+                "delete-session",
+                "load-manifest",
+                "save-manifest",
+            ):
                 ns.add_func(fname, _trap(f"snapshot-storage.{fname}"))
 
         with root.add_instance("strands:agent/snapshot-trigger-handler@0.1.0") as ns:
@@ -264,9 +272,8 @@ def _register_imports(linker: Linker, agent: Agent, registry: _ToolStreamRegistr
 
 # --- Store + Linker -----------------------------------------------------
 
-def _make_store_and_linker(
-    agent: Agent, registry: _ToolStreamRegistry
-) -> tuple[Store, Linker]:
+
+def _make_store_and_linker(agent: Agent, registry: _ToolStreamRegistry) -> tuple[Store, Linker]:
     engine = _get_engine()
     store = Store(engine)
     wasi = WasiConfig()

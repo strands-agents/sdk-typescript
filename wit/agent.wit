@@ -6,7 +6,7 @@ interface api {
   use messages.{message, content-block, prompt-input};
   use models.{model-config, model-params};
   use tools.{tool-spec, tool-choice, agent-as-tool-config};
-  use sessions.{session-config, storage-error};
+  use sessions.{session-manager, storage-error};
   use conversation.{conversation-manager-config};
   use retry.{retry-config};
   use streaming.{stream-event, agent-trace, agent-metrics};
@@ -98,7 +98,7 @@ interface api {
     /// W3C Trace Context linking the agent's spans to a caller-supplied trace.
     trace-context: option<trace-context>,
     /// Session persistence. Absent means no persistence.
-    session: option<session-config>,
+    session: option<session-manager>,
     /// Conversation history management. Defaults to a sliding window.
     conversation-manager: option<conversation-manager-config>,
     /// Retry policy for failed model calls. Defaults to exponential backoff capped at 6 attempts.
@@ -199,9 +199,9 @@ world agent {
   import tool-provider;
   /// Receives structured log entries from the agent.
   import host-log;
-  /// Custom snapshot storage. Selected via `session-config.storage = custom`.
+  /// Custom snapshot storage. Selected via `session-manager.storage = custom`.
   import snapshot-storage;
-  /// Custom snapshot policy. Selected via `session-config.save-latest = trigger(id)`.
+  /// Custom snapshot policy. Selected via `session-manager.save-latest = trigger(id)`.
   import snapshot-trigger-handler;
   /// Custom model provider. Selected via `model-config.custom`.
   import model-provider;

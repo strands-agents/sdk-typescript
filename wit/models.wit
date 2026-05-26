@@ -3,7 +3,7 @@ package strands:agent@0.1.0;
 /// Model provider configuration and pluggable custom providers.
 interface models {
   /// Anthropic API model configuration.
-  record anthropic-config {
+  record anthropic-model {
     /// Model identifier, e.g. `claude-opus-4-7`.
     model-id: option<string>,
     /// API key. Falls back to the `ANTHROPIC_API_KEY` environment variable.
@@ -13,7 +13,7 @@ interface models {
   }
 
   /// AWS Bedrock model configuration.
-  record bedrock-config {
+  record bedrock-model {
     /// Bedrock model identifier, e.g. `us.anthropic.claude-opus-4-7-v1:0`.
     model-id: string,
     /// AWS region. Falls back to the default credential chain.
@@ -29,7 +29,7 @@ interface models {
   }
 
   /// OpenAI API model configuration.
-  record openai-config {
+  record openai-model {
     /// Model identifier, e.g. `gpt-4o`.
     model-id: option<string>,
     /// API key. Falls back to the `OPENAI_API_KEY` environment variable.
@@ -39,7 +39,7 @@ interface models {
   }
 
   /// Google Gemini API model configuration.
-  record gemini-config {
+  record google-model {
     /// Model identifier, e.g. `gemini-2.0-flash`.
     model-id: option<string>,
     /// API key. Falls back to the `GOOGLE_API_KEY` environment variable.
@@ -49,7 +49,7 @@ interface models {
   }
 
   /// Custom model provider supplied by your application.
-  record custom-model-config {
+  record custom-model {
     /// Identifier routed back on each call. One application can register
     /// multiple providers under distinct ids.
     provider-id: string,
@@ -64,16 +64,16 @@ interface models {
   /// Which model provider the agent should use.
   variant model-config {
     /// Anthropic API.
-    anthropic(anthropic-config),
+    anthropic(anthropic-model),
     /// AWS Bedrock.
-    bedrock(bedrock-config),
+    bedrock(bedrock-model),
     /// OpenAI API.
-    openai(openai-config),
+    openai(openai-model),
     /// Google Gemini API.
-    gemini(gemini-config),
+    gemini(google-model),
     /// Custom provider supplied by your application. Implement the
     /// `model-provider` interface to serve it.
-    custom(custom-model-config),
+    custom(custom-model),
   }
 
   /// Sampling parameters applied to every call on the chosen provider.

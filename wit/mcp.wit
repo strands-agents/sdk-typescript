@@ -18,15 +18,15 @@ interface mcp {
   /// How the client talks to the MCP server.
   variant mcp-transport {
     /// STDIO transport. Spawn a local process and talk via pipes.
-    stdio(stdio-transport-config),
+    stdio(stdio-transport),
     /// Streamable HTTP transport, per the current MCP specification.
-    streamable-http(http-transport-config),
+    streamable-http(http-transport),
     /// Legacy Server-Sent Events transport. Retained for older servers.
-    sse(sse-transport-config),
+    sse(sse-transport),
   }
 
   /// STDIO transport configuration.
-  record stdio-transport-config {
+  record stdio-transport {
     /// Command to execute.
     command: string,
     /// Arguments passed to the command.
@@ -46,7 +46,7 @@ interface mcp {
   }
 
   /// HTTP transport configuration.
-  record http-transport-config {
+  record http-transport {
     /// Server endpoint URL.
     url: string,
     /// Extra HTTP headers.
@@ -54,7 +54,7 @@ interface mcp {
   }
 
   /// SSE transport configuration.
-  record sse-transport-config {
+  record sse-transport {
     /// Server endpoint URL.
     url: string,
     /// Extra HTTP headers.

@@ -35,8 +35,8 @@ cache_dir = ".pytest_cache"
 [tool.ruff]
 line-length = 120
 include = ["strands-py-wasm/src/**/*.py", "strandly/scripts/**/*.py"]
-# _generated.py is machine-written; neither lint nor format enforce rules on it.
-extend-exclude = ["strands-py-wasm/src/strands/_generated.py"]
+# _generated/ is machine-written; neither lint nor format enforce rules on it.
+extend-exclude = ["strands-py-wasm/src/strands/_generated/"]
 
 [tool.ruff.lint]
 select = [

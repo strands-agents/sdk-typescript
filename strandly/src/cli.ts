@@ -210,9 +210,14 @@ function test(opts?: { py?: boolean; ts?: boolean; file?: string }): void {
 
 function check(opts?: { ts?: boolean; wasm?: boolean; py?: boolean }): void {
   const all = !opts?.ts && !opts?.wasm && !opts?.py
-  if (all || opts?.py) py('ruff check src/strands')
+  if (all || opts?.py) {
+    py('ruff check src/strands')
+    py('ruff format --check src/strands')
+    py('pyright src/strands')
+  }
   if (all || opts?.ts) run('npm run type-check -w strands-ts')
   if (all || opts?.wasm) run('npm run type-check -w strands-wasm')
+  if (all || opts?.py || opts?.wasm) generate({ check: true })
 }
 
 function fmt(opts?: { check?: boolean }): void {
@@ -242,7 +247,10 @@ function generate(opts?: { check?: boolean }): void {
   }
 
   // Generate Python types from WIT via wasmtime-py's component bindgen.
-  run(`${VENV}/bin/python -m wasmtime.component.bindgen wit -o strands-py-wasm/src/strands/_generated.py`)
+  // Output is a package: one module per WIT interface plus an __init__.py.
+  // The hand-written ``strands.types`` module re-exports the curated public
+  // subset from this private ``_generated`` package.
+  run(`${VENV}/bin/python -m wasmtime.component.bindgen wit -o strands-py-wasm/src/strands/_generated`)
 
   // Ensure TS + WASM are built first.
   if (!existsSync(join(ROOT, 'strands-wasm/dist/strands-agent.wasm'))) {
@@ -251,12 +259,13 @@ function generate(opts?: { check?: boolean }): void {
 
   if (opts?.check) {
     try {
-      execSync('git diff --quiet -- strands-wasm/generated/ strands-ts/generated/ strands-py-wasm/src/strands/_generated.py', {
-        cwd: ROOT,
-      })
+      execSync(
+        'git diff --quiet -- strands-wasm/generated/ strands-ts/generated/ strands-py-wasm/src/strands/_generated/',
+        { cwd: ROOT }
+      )
     } catch {
       console.error("error: generated files are out of date -- run 'strandly generate' and commit")
-      run('git diff --stat -- strands-wasm/generated/ strands-ts/generated/ strands-py-wasm/src/strands/_generated.py')
+      run('git diff --stat -- strands-wasm/generated/ strands-ts/generated/ strands-py-wasm/src/strands/_generated/')
       process.exit(1)
     }
   }

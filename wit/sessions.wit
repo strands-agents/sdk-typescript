@@ -6,13 +6,13 @@ interface sessions {
   use messages.{message};
 
   /// Local filesystem snapshot storage.
-  record file-storage-config {
+  record file-storage {
     /// Directory under which snapshots are written.
     base-dir: string,
   }
 
   /// S3 snapshot storage.
-  record s3-storage-config {
+  record s3-storage {
     /// Target bucket.
     bucket: string,
     /// AWS region. Falls back to the default credential chain.
@@ -22,7 +22,7 @@ interface sessions {
   }
 
   /// Reference to an application-implemented storage backend.
-  record custom-storage-config {
+  record custom-storage {
     /// Identifier routed back to the `snapshot-storage` handler on every
     /// call. One application can register multiple backends under
     /// distinct ids.
@@ -32,11 +32,11 @@ interface sessions {
   /// Where to persist session snapshots.
   variant storage-config {
     /// Local filesystem.
-    file(file-storage-config),
+    file(file-storage),
     /// Amazon S3.
-    s3(s3-storage-config),
+    s3(s3-storage),
     /// Application-implemented backend.
-    custom(custom-storage-config),
+    custom(custom-storage),
   }
 
   /// When to update the "latest" snapshot pointer. The `trigger` arm
@@ -53,7 +53,7 @@ interface sessions {
   }
 
   /// Session persistence configuration attached to an agent.
-  record session-config {
+  record session-manager {
     /// Identifier for this session's snapshots.
     session-id: string,
     /// Storage backend.
@@ -96,11 +96,9 @@ interface sessions {
     removed-message-count: s32,
   }
 
-  /// Conversation manager snapshot state. Which arm is populated depends
-  /// on the conversation manager the agent was built with.
+  /// Conversation manager snapshot state. Wrapped in ``option<>`` at the
+  /// call site; ``none`` means there's no manager and nothing to persist.
   variant conversation-manager-state {
-    /// No conversation manager or null manager; nothing to persist.
-    none,
     /// Sliding-window manager state.
     sliding-window(sliding-window-state),
     /// Summarizing manager state.
@@ -270,7 +268,7 @@ interface snapshot-storage {
 }
 
 /// Pluggable snapshot trigger called after each invocation.
-/// Enabled via `session-config.save-latest = trigger(id)`.
+/// Enabled via `session-manager.save-latest = trigger(id)`.
 interface snapshot-trigger-handler {
   use messages.{message};
 

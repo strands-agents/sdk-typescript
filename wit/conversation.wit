@@ -6,7 +6,7 @@ interface conversation {
 
   /// Sliding-window strategy: trim oldest messages once the conversation
   /// exceeds `window-size`.
-  record sliding-window-config {
+  record sliding-window-conversation-manager {
     /// Maximum number of messages retained.
     window-size: s32,
     /// Drop older tool results when trimming.
@@ -15,7 +15,7 @@ interface conversation {
 
   /// Summarizing strategy: once the conversation grows, summarize older
   /// messages into a single summary message and keep the rest verbatim.
-  record summarizing-config {
+  record summarizing-conversation-manager {
     /// Fraction of messages to summarize. Must be between 0.1 and 0.8;
     /// out-of-range values surface on the first `generate` call as
     /// `agent-error::invalid-input`.
@@ -28,14 +28,13 @@ interface conversation {
     summarization-model: option<model-config>,
   }
 
-  /// Which conversation manager the agent uses.
+  /// Which conversation manager the agent uses. Wrapped in
+  /// ``option<>`` at the call site; ``none`` means history grows without
+  /// bound and context-overflow errors propagate to the caller.
   variant conversation-manager-config {
-    /// No conversation management. History grows without bound and
-    /// context-overflow errors propagate to the caller.
-    none,
     /// Sliding-window trimming.
-    sliding-window(sliding-window-config),
+    sliding-window(sliding-window-conversation-manager),
     /// Summarization of older messages.
-    summarizing(summarizing-config),
+    summarizing(summarizing-conversation-manager),
   }
 }

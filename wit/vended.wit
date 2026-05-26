@@ -7,30 +7,30 @@ interface vended {
   /// Built-in tools.
   variant vended-tool {
     /// Run shell commands in a persistent bash session.
-    bash(bash-tool-config),
+    bash(bash-tool),
     /// Create, view, and edit files on disk.
-    file-editor(file-editor-tool-config),
+    file-editor(file-editor-tool),
     /// Make HTTP requests.
-    http-request(http-request-tool-config),
+    http-request(http-request-tool),
     /// Read and execute Jupyter notebook cells.
-    notebook(notebook-tool-config),
+    notebook(notebook-tool),
   }
 
   /// Bash tool configuration.
-  record bash-tool-config {
+  record bash-tool {
     /// Default timeout for `execute` calls, in seconds.
     default-timeout-s: option<s32>,
   }
 
   /// File editor tool configuration.
-  record file-editor-tool-config {
+  record file-editor-tool {
     /// Directory outside of which the tool refuses to operate. Absent
     /// permits any path the sandbox grants.
     workspace-root: option<string>,
   }
 
   /// HTTP request tool configuration.
-  record http-request-tool-config {
+  record http-request-tool {
     /// Hosts the tool is allowed to reach. Empty permits any host the
     /// sandbox permits.
     allowed-hosts: list<string>,
@@ -39,7 +39,7 @@ interface vended {
   }
 
   /// Notebook tool configuration.
-  record notebook-tool-config {
+  record notebook-tool {
     /// Directory outside of which the tool refuses to operate. Absent
     /// permits any path the sandbox grants.
     workspace-root: option<string>,
@@ -52,7 +52,7 @@ interface vended {
   }
 
   /// Skills plugin configuration.
-  record skills-plugin-config {
+  record agent-skills {
     /// Skill sources to load.
     skills: list<skill-source>,
     /// Fail if a skill cannot be loaded.
@@ -64,7 +64,7 @@ interface vended {
   }
 
   /// Context offloader plugin configuration.
-  record context-offloader-plugin-config {
+  record context-offloader {
     /// Token threshold at which tool results are offloaded.
     max-result-tokens: option<s32>,
     /// Tokens to keep inline when offloading (as a preview).
@@ -77,8 +77,8 @@ interface vended {
   /// Built-in plugins.
   variant vended-plugin {
     /// Load and activate Anthropic-style skills from disk.
-    skills(skills-plugin-config),
+    skills(agent-skills),
     /// Offload large tool results to external storage.
-    context-offloader(context-offloader-plugin-config),
+    context-offloader(context-offloader),
   }
 }

@@ -9,7 +9,7 @@ on:
 
 jobs:
   py-check:
-    name: Python (ruff + pyright + generated-up-to-date)
+    name: strandly check --py
     permissions:
       contents: read
     runs-on: ubuntu-latest
@@ -34,11 +34,16 @@ jobs:
 
       - name: Bootstrap strandly + venv
         run: |
-          npm ci
-          npm link -w strandly
+          npm ci --include=optional
+          npm install --no-save --ignore-scripts @oxc-parser/binding-linux-x64-gnu
           python -m venv .venv
           .venv/bin/pip install -e .
-          .venv/bin/pip install -e strands-py-wasm
+
+      - name: Build strands-wasm
+        run: npx strandly build --wasm
+
+      - name: Install strands-py-wasm
+        run: .venv/bin/pip install -e strands-py-wasm
 
       - name: strandly check --py
-        run: strandly check --py
+        run: npx strandly check --py

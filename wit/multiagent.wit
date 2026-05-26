@@ -39,7 +39,7 @@ interface multi-agent {
   }
 
   /// Definition of an agent-backed node.
-  record agent-node-config {
+  record agent-node {
     /// Node identifier, unique within its graph/swarm.
     id: string,
     /// Human-readable description.
@@ -52,7 +52,7 @@ interface multi-agent {
   }
 
   /// Definition of a node that wraps another orchestrator.
-  record multi-agent-node-config {
+  record multi-agent-node {
     /// Node identifier, unique within its parent graph/swarm.
     id: string,
     /// Human-readable description.
@@ -65,9 +65,9 @@ interface multi-agent {
   /// Any node a graph or swarm can execute.
   variant node-config {
     /// Wraps a single agent.
-    agent(agent-node-config),
+    agent(agent-node),
     /// Wraps a nested orchestrator.
-    multi-agent(multi-agent-node-config),
+    multi-agent(multi-agent-node),
   }
 
   /// Condition attached to a graph edge.
@@ -112,7 +112,7 @@ interface multi-agent {
     /// Identifier of this swarm.
     id: string,
     /// Agent-backed nodes available for handoff.
-    nodes: list<agent-node-config>,
+    nodes: list<agent-node>,
     /// Agent that runs first.
     start-node-id: string,
     /// Max total agent executions. Absent means no limit.

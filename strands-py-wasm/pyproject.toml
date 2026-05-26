@@ -29,7 +29,7 @@ classifiers = [
 ]
 dependencies = [
     # Imports as `wasmtime`. Pinned to pgrayy/wasm-deps git URL until upstream PRs land.
-    "pgrayy-wasmtime @ git+https://github.com/pgrayy/wasm-deps.git@983c56c037#subdirectory=wasmtime-py",
+    "pgrayy-wasmtime @ git+https://github.com/pgrayy/wasm-deps.git@983c56c037321a50733355ea17f3a192899194dc#subdirectory=wasmtime-py",
 ]
 
 

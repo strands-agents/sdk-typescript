@@ -57,7 +57,6 @@ import type {
 } from '@strands-agents/sdk'
 import {
   ConversationManager,
-  NullConversationManager,
   SlidingWindowConversationManager,
   SummarizingConversationManager,
 } from '@strands-agents/sdk'
@@ -447,8 +446,6 @@ function createConversationManager(config: AgentConfig): ConversationManager | u
   const cm = config.conversationManager
   if (!cm) return undefined
   switch (cm.tag) {
-    case 'none':
-      return new NullConversationManager()
     case 'sliding-window':
       return new SlidingWindowConversationManager({
         windowSize: cm.val.windowSize,
