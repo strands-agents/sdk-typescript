@@ -2151,8 +2151,14 @@ describe('normalizeToolUseNames', () => {
         // were lifetime-scoped, the second `invoke()` would trip on its first
         // turn (75 cumulative across both calls).
         const model = new MockMessageModel()
-          .addTurn({ type: 'textBlock', text: 'first' }, { usage: { inputTokens: 10, outputTokens: 50, totalTokens: 60 } })
-          .addTurn({ type: 'textBlock', text: 'second' }, { usage: { inputTokens: 10, outputTokens: 50, totalTokens: 60 } })
+          .addTurn(
+            { type: 'textBlock', text: 'first' },
+            { usage: { inputTokens: 10, outputTokens: 50, totalTokens: 60 } }
+          )
+          .addTurn(
+            { type: 'textBlock', text: 'second' },
+            { usage: { inputTokens: 10, outputTokens: 50, totalTokens: 60 } }
+          )
 
         const agent = new Agent({ model })
 
@@ -2188,9 +2194,7 @@ describe('normalizeToolUseNames', () => {
 
         const { result } = await collectGenerator(agent.stream('go', { maxTurns: 1 }))
 
-        expect(result).toEqual(
-          expect.objectContaining({ type: 'agentResult', stopReason: 'maxTurnsExceeded' })
-        )
+        expect(result).toEqual(expect.objectContaining({ type: 'agentResult', stopReason: 'maxTurnsExceeded' }))
       })
     })
   })
