@@ -2144,24 +2144,6 @@ describe('normalizeToolUseNames', () => {
       })
     })
 
-    describe('when a zero cap trips on iteration 1', () => {
-      it('synthesizes an assistant message since none has been appended yet', async () => {
-        const model = new MockMessageModel().addTurn({ type: 'textBlock', text: 'never reached' })
-        const agent = new Agent({ model })
-
-        const result = await agent.invoke('go', { maxTurns: 0 })
-
-        expect(result).toEqual(
-          expect.objectContaining({
-            type: 'agentResult',
-            stopReason: 'maxTurnsExceeded',
-            lastMessage: expect.objectContaining({ role: 'assistant', content: [] }),
-            metrics: expectLoopMetrics({ cycleCount: 0 }),
-          })
-        )
-      })
-    })
-
     describe('when the same agent is reused across invocations', () => {
       it('scopes the budget to the current invocation, not lifetime', async () => {
         // Each turn uses 50 output tokens. With maxOutputTokens: 75, a single
@@ -2175,10 +2157,24 @@ describe('normalizeToolUseNames', () => {
         const agent = new Agent({ model })
 
         const r1 = await agent.invoke('go', { maxOutputTokens: 75 })
-        const r2 = await agent.invoke('go again', { maxOutputTokens: 75 })
-
         expect(r1.stopReason).toBe('endTurn')
+        expect(r1.metrics?.latestAgentInvocation?.cycles.length).toBe(1)
+
+        const r2 = await agent.invoke('go again', { maxOutputTokens: 75 })
         expect(r2.stopReason).toBe('endTurn')
+        expect(r2.metrics?.latestAgentInvocation?.cycles.length).toBe(1)
+      })
+    })
+
+    describe('when a budget option is invalid', () => {
+      it.each([
+        ['negative', { maxTurns: -1 }],
+        ['zero', { maxTurns: 0 }],
+        ['NaN', { maxOutputTokens: NaN }],
+        ['Infinity', { maxTotalTokens: Infinity }],
+      ])('rejects %s with TypeError', async (_label, options) => {
+        const agent = new Agent({ model: new MockMessageModel().addTurn({ type: 'textBlock', text: 'never reached' }) })
+        await expect(agent.invoke('go', options)).rejects.toThrow(TypeError)
       })
     })
 

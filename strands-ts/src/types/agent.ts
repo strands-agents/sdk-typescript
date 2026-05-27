@@ -130,11 +130,8 @@ export interface InvokeOptions {
    * previous turn always run to completion before the cap fires, so
    * `agent.messages` remains in a reinvokable state.
    *
-   * Setting `maxTurns: 0` returns immediately with
-   * `stopReason: 'maxTurnsExceeded'` and a synthesized empty assistant
-   * message — no model call is made and no user input is appended.
-   *
-   * Omit (or set to `undefined`) for no limit.
+   * Must be a positive finite number. Omit (or set to `undefined`) for no
+   * limit.
    */
   maxTurns?: number
 
@@ -157,7 +154,7 @@ export interface InvokeOptions {
    * The agent stops at the first turn boundary on or after the budget is
    * reached; it does not bound any individual model call.
    *
-   * Omit for no limit.
+   * Must be a positive finite number. Omit for no limit.
    */
   maxOutputTokens?: number
 
@@ -182,7 +179,7 @@ export interface InvokeOptions {
    * iteration, `maxTotalTokensExceeded` wins. If `maxTurns` would also trip,
    * `maxTurnsExceeded` wins over both.
    *
-   * Omit for no limit.
+   * Must be a positive finite number. Omit for no limit.
    */
   maxTotalTokens?: number
 }

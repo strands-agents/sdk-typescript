@@ -495,6 +495,28 @@ export class Agent implements LocalAgent, InvokableAgent {
   }
 
   /**
+   * Validates the per-invocation budget caps in {@link InvokeOptions}. Called
+   * once at the top of `_stream` so bad inputs fail fast with a clear error
+   * instead of silently no-op'ing (`NaN`, `Infinity`) or tripping pathologically
+   * (zero swallows the user input; negative trips immediately).
+   *
+   * Each cap, when set, must be a positive finite number. Fractional values
+   * are accepted — harmless, and useful for token budgets derived from
+   * arithmetic.
+   */
+  private _validateMaxBudgets(options: InvokeOptions | undefined): void {
+    if (!options) return
+    const assertPositive = (name: string, value: number | undefined): void => {
+      if (value !== undefined && (!Number.isFinite(value) || value <= 0)) {
+        throw new TypeError(`${name} must be a positive finite number, got ${value}`)
+      }
+    }
+    assertPositive('maxTurns', options.maxTurns)
+    assertPositive('maxOutputTokens', options.maxOutputTokens)
+    assertPositive('maxTotalTokens', options.maxTotalTokens)
+  }
+
+  /**
    * Evaluates the per-invocation budget caps in {@link InvokeOptions} against
    * the current invocation's metrics. Called at the top of each agent-loop
    * iteration, after `_throwIfCancelled` and before `startCycle`.
@@ -898,6 +920,8 @@ export class Agent implements LocalAgent, InvokableAgent {
     let currentArgs: InvokeArgs | undefined = args
     let result: AgentResult | undefined
 
+    this._validateMaxBudgets(options)
+
     // Resolve structured output schema from per-invocation options or constructor config
     const structuredOutputSchema = options?.structuredOutputSchema ?? this._structuredOutputSchema
     const structuredOutputTool = structuredOutputSchema ? new StructuredOutputTool(structuredOutputSchema) : undefined
@@ -967,15 +991,14 @@ export class Agent implements LocalAgent, InvokableAgent {
 
         const budgetStopReason = this._checkMaxBudgets(options)
         if (budgetStopReason) {
-          // Fallback: a zero-valued cap can trip on iteration 1 before any messages are appended.
-          const lastMessage = this.messages.at(-1) ?? new Message({ role: 'assistant', content: [] })
-          return new AgentResult({
+          result = new AgentResult({
             stopReason: budgetStopReason,
-            lastMessage,
+            lastMessage: this.messages.at(-1)!,
             traces: this._tracer.localTraces,
             metrics: this._meter.metrics,
             invocationState,
           })
+          return result
         }
 
         // Start metrics cycle tracking
