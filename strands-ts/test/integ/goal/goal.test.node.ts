@@ -36,10 +36,14 @@ describe.skipIf(bedrock.skip)('GoalLoop Integration', () => {
       const agent = new Agent({ model: createModel(), plugins: [plugin], printer: false })
       await agent.invoke('Say hello.')
 
-      expect(plugin.lastResult?.passed).toBe(true)
-      expect(plugin.lastResult?.stopReason).toBe('satisfied')
-      expect(plugin.lastResult?.attempts).toHaveLength(2)
-      expect(plugin.lastResult?.attempts[0]?.feedback).toBe('TRIGGER_RETRY_MARKER')
+      expect(plugin.lastResult(agent)).toEqual({
+        passed: true,
+        stopReason: 'satisfied',
+        attempts: [
+          { attempt: 1, passed: false, feedback: 'TRIGGER_RETRY_MARKER' },
+          { attempt: 2, passed: true },
+        ],
+      })
 
       // Standard mode keeps both assistant turns in the transcript and the
       // validator feedback is surfaced as a user message between them.
@@ -71,9 +75,15 @@ describe.skipIf(bedrock.skip)('GoalLoop Integration', () => {
       const agent = new Agent({ model: createModel(), plugins: [plugin], printer: false })
       await agent.invoke('Say hello.')
 
-      expect(plugin.lastResult?.passed).toBe(true)
-      expect(plugin.lastResult?.stopReason).toBe('satisfied')
-      expect(plugin.lastResult?.attempts).toHaveLength(3)
+      expect(plugin.lastResult(agent)).toEqual({
+        passed: true,
+        stopReason: 'satisfied',
+        attempts: [
+          { attempt: 1, passed: false, feedback: 'force-retry-1' },
+          { attempt: 2, passed: false, feedback: 'force-retry-2' },
+          { attempt: 3, passed: true },
+        ],
+      })
 
       // The defining property of fresh-context mode: every failed attempt's
       // assistant turn was popped on restart, so only the final successful

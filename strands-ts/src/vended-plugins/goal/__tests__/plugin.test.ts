@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest'
 import { GoalLoop } from '../plugin.js'
-import type { GoalAttempt, ValidationOutcome } from '../plugin.js'
+import type { GoalAttempt, GoalResult, ValidationOutcome } from '../plugin.js'
 import { buildJudgePrompt, JUDGE_OUTCOME_SCHEMA } from '../judge.js'
 import { Agent } from '../../../agent/agent.js'
 import { AfterInvocationEvent } from '../../../hooks/events.js'
@@ -50,7 +50,7 @@ describe('GoalLoop', () => {
 
       expect(validate).toHaveBeenCalledTimes(1)
       expect(result.lastMessage.content[0]).toEqual({ type: 'textBlock', text: 'first' })
-      expect(plugin.lastResult).toEqual({
+      expect(plugin.lastResult(agent)).toEqual({
         passed: true,
         stopReason: 'satisfied',
         attempts: [{ attempt: 1, passed: true }],
@@ -77,7 +77,7 @@ describe('GoalLoop', () => {
       await agent.invoke('summarise')
 
       expect(model.callCount).toBe(3)
-      expect(plugin.lastResult).toEqual({
+      expect(plugin.lastResult(agent)).toEqual({
         passed: true,
         stopReason: 'satisfied',
         attempts: [
@@ -111,7 +111,7 @@ describe('GoalLoop', () => {
       await agent.invoke('go')
 
       expect(model.callCount).toBe(3)
-      expect(plugin.lastResult).toEqual({
+      expect(plugin.lastResult(agent)).toEqual({
         passed: false,
         stopReason: 'maxAttempts',
         attempts: [
@@ -143,7 +143,7 @@ describe('GoalLoop', () => {
 
       await agent.invoke('go')
 
-      expect(plugin.lastResult).toEqual({
+      expect(plugin.lastResult(agent)).toEqual({
         passed: true,
         stopReason: 'satisfied',
         attempts: [
@@ -175,7 +175,7 @@ describe('GoalLoop', () => {
 
       await agent.invoke('go')
 
-      expect(plugin.lastResult).toEqual({
+      expect(plugin.lastResult(agent)).toEqual({
         passed: true,
         stopReason: 'satisfied',
         attempts: [
@@ -232,7 +232,7 @@ describe('GoalLoop', () => {
         await vi.runAllTimersAsync()
         await invokePromise
 
-        expect(plugin.lastResult).toEqual({
+        expect(plugin.lastResult(agent)).toEqual({
           passed: false,
           stopReason: 'timeout',
           attempts: [{ attempt: 1, passed: false, feedback: 'try again' }],
@@ -247,7 +247,9 @@ describe('GoalLoop', () => {
   describe('lastResult lifecycle', () => {
     it('is undefined before first invoke', () => {
       const plugin = new GoalLoop({ validate: () => true, maxAttempts: 1, name: 'lr-untouched' })
-      expect(plugin.lastResult).toBeUndefined()
+      const model = new MockMessageModel()
+      const agent = new Agent({ model, plugins: [plugin], printer: false })
+      expect(plugin.lastResult(agent)).toBeUndefined()
     })
 
     it('is replaced on each completed run', async () => {
@@ -260,7 +262,7 @@ describe('GoalLoop', () => {
       const m1 = new MockMessageModel().addTurn({ type: 'textBlock', text: 'one' })
       const a1 = new Agent({ model: m1, plugins: [plugin], printer: false })
       await a1.invoke('first')
-      const after1 = plugin.lastResult
+      const after1 = plugin.lastResult(a1)
       expect(after1).toEqual({
         passed: true,
         stopReason: 'satisfied',
@@ -269,7 +271,7 @@ describe('GoalLoop', () => {
 
       m1.addTurn({ type: 'textBlock', text: 'two' })
       await a1.invoke('second')
-      const after2 = plugin.lastResult
+      const after2 = plugin.lastResult(a1)
       expect(after2).not.toBe(after1)
       expect(after2).toEqual({
         passed: true,
@@ -288,7 +290,7 @@ describe('GoalLoop', () => {
       const agent = new Agent({ model, plugins: [plugin], printer: false })
 
       await expect(agent.invoke('go')).rejects.toThrow('boom')
-      expect(plugin.lastResult).toBeUndefined()
+      expect(plugin.lastResult(agent)).toBeUndefined()
     })
 
     it('is undefined while a run is mid-flight (read between attempts via hook)', async () => {
@@ -296,12 +298,12 @@ describe('GoalLoop', () => {
         .addTurn({ type: 'textBlock', text: 'a' })
         .addTurn({ type: 'textBlock', text: 'b' })
 
-      const observed: Array<GoalLoop['lastResult']> = []
+      const observed: Array<GoalResult | undefined> = []
       let plugin: GoalLoop
       plugin = new GoalLoop({
         name: 'lr-midflight',
-        validate: (response) => {
-          observed.push(plugin.lastResult)
+        validate: (response, hostAgent) => {
+          observed.push(plugin.lastResult(hostAgent))
           const text = (response.content[0] as TextBlock).text
           return text === 'b'
         },
@@ -312,7 +314,7 @@ describe('GoalLoop', () => {
       await agent.invoke('go')
 
       expect(observed).toEqual([undefined, undefined])
-      expect(plugin.lastResult).toEqual({
+      expect(plugin.lastResult(agent)).toEqual({
         passed: true,
         stopReason: 'satisfied',
         attempts: [
@@ -380,19 +382,57 @@ describe('GoalLoop', () => {
   })
 
   describe('multiple plugin instances', () => {
-    it('throws when the same plugin is attached to a second agent', async () => {
-      // Plugin.initAgent runs lazily on first Agent.initialize() (triggered by
-      // invoke), so the throw surfaces from the second agent's invoke, not its
-      // construction.
-      const m1 = new MockMessageModel().addTurn({ type: 'textBlock', text: 'a' })
-      const m2 = new MockMessageModel().addTurn({ type: 'textBlock', text: 'b' })
-      const plugin = new GoalLoop({ validate: () => true, maxAttempts: 1, name: 'shared' })
+    it('shares one plugin across multiple agents with independent run state', async () => {
+      // Per-agent run state is keyed off the agent (WeakMap), so concurrent or
+      // sequential runs on different agents don't conflate results.
+      const m1 = new MockMessageModel()
+        .addTurn({ type: 'textBlock', text: 'a1-attempt-1' })
+        .addTurn({ type: 'textBlock', text: 'a1-attempt-2' })
+      const m2 = new MockMessageModel().addTurn({ type: 'textBlock', text: 'a2-only' })
+
+      let n1 = 0
+      const plugin = new GoalLoop({
+        name: 'shared',
+        validate: (response) => {
+          const text = (response.content[0] as TextBlock).text
+          if (text.startsWith('a2')) return true
+          n1++
+          return n1 === 2
+        },
+        maxAttempts: 5,
+      })
 
       const a1 = new Agent({ model: m1, plugins: [plugin], printer: false })
       const a2 = new Agent({ model: m2, plugins: [plugin], printer: false })
 
       await a1.invoke('first')
-      await expect(a2.invoke('second')).rejects.toThrow(/cannot be shared across agents/)
+      await a2.invoke('second')
+
+      expect(plugin.lastResult(a1)).toEqual({
+        passed: true,
+        stopReason: 'satisfied',
+        attempts: [
+          { attempt: 1, passed: false },
+          { attempt: 2, passed: true },
+        ],
+      })
+      expect(plugin.lastResult(a2)).toEqual({
+        passed: true,
+        stopReason: 'satisfied',
+        attempts: [{ attempt: 1, passed: true }],
+      })
+    })
+
+    it('throws when two GoalLoops are attached to the same agent', async () => {
+      // Two GoalLoops both write `event.resume` in AfterInvocationEvent — last
+      // writer wins, silently dropping one's feedback. Compose constraints in a
+      // single validator function instead.
+      const model = new MockMessageModel().addTurn({ type: 'textBlock', text: 'x' })
+      const a = new GoalLoop({ validate: () => true, maxAttempts: 1, name: 'first' })
+      const b = new GoalLoop({ validate: () => true, maxAttempts: 1, name: 'second' })
+      const agent = new Agent({ model, plugins: [a, b], printer: false })
+
+      await expect(agent.invoke('go')).rejects.toThrow(/another GoalLoop is already attached/)
     })
   })
 
@@ -432,7 +472,7 @@ describe('GoalLoop', () => {
 
       await agent.invoke('do the thing')
 
-      expect(plugin.lastResult).toEqual({
+      expect(plugin.lastResult(agent)).toEqual({
         passed: true,
         stopReason: 'satisfied',
         attempts: [
@@ -525,10 +565,10 @@ describe('GoalLoop', () => {
       const agent = new Agent({ model, plugins: [plugin], printer: false })
 
       await expect(agent.invoke('first')).rejects.toThrow('boom')
-      expect(plugin.lastResult).toBeUndefined()
+      expect(plugin.lastResult(agent)).toBeUndefined()
 
       await agent.invoke('second')
-      expect(plugin.lastResult).toEqual({
+      expect(plugin.lastResult(agent)).toEqual({
         passed: true,
         stopReason: 'satisfied',
         attempts: [{ attempt: 1, passed: true }],
@@ -642,7 +682,7 @@ describe('GoalLoop natural-language judge', () => {
 
     await agent.invoke('explain rainbows')
 
-    expect(plugin.lastResult).toEqual({
+    expect(plugin.lastResult(agent)).toEqual({
       passed: true,
       stopReason: 'satisfied',
       attempts: [{ attempt: 1, passed: true }],
@@ -665,7 +705,7 @@ describe('GoalLoop natural-language judge', () => {
 
     await agent.invoke('explain something')
 
-    expect(plugin.lastResult).toEqual({
+    expect(plugin.lastResult(agent)).toEqual({
       passed: true,
       stopReason: 'satisfied',
       attempts: [
@@ -695,7 +735,7 @@ describe('GoalLoop natural-language judge', () => {
 
     await agent.invoke('go')
 
-    expect(plugin.lastResult).toEqual({
+    expect(plugin.lastResult(agent)).toEqual({
       passed: true,
       stopReason: 'satisfied',
       attempts: [{ attempt: 1, passed: true }],
@@ -725,7 +765,7 @@ describe('GoalLoop natural-language judge', () => {
 
     await agent.invoke('initial')
 
-    expect(plugin.lastResult).toEqual({
+    expect(plugin.lastResult(agent)).toEqual({
       passed: true,
       stopReason: 'satisfied',
       attempts: [
@@ -755,7 +795,7 @@ describe('GoalLoop natural-language judge', () => {
 
     await agent.invoke('go')
 
-    expect(plugin.lastResult).toEqual({
+    expect(plugin.lastResult(agent)).toEqual({
       passed: true,
       stopReason: 'satisfied',
       attempts: [{ attempt: 1, passed: true }],

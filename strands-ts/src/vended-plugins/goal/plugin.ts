@@ -17,7 +17,7 @@
  * })
  * const agent = new Agent({ model, plugins: [concise] })
  * await agent.invoke('Explain how rainbows form.')
- * console.log(concise.lastResult)
+ * console.log(concise.lastResult(agent))
  * ```
  *
  * @example
@@ -66,7 +66,7 @@ import { warnOnce } from '../../logging/warn-once.js'
 import type { Model } from '../../models/model.js'
 import type { Plugin } from '../../plugins/plugin.js'
 import type { LocalAgent } from '../../types/agent.js'
-import type { Message } from '../../types/messages.js'
+import type { ContentBlock, Message } from '../../types/messages.js'
 import type { Snapshot } from '../../types/snapshot.js'
 import { JUDGE_OUTCOME_SCHEMA, JUDGE_SYSTEM_PROMPT, buildJudgePrompt } from './judge.js'
 
@@ -81,10 +81,14 @@ export interface ValidationOutcome {
  * Validator must return `true`, `false`, or a `ValidationOutcome`. Booleans
  * are shorthand: `true` → pass, `false` → fail with no feedback. Use the
  * object form when you have actionable feedback for the next attempt.
+ *
+ * The second argument is the host agent — read `agent.messages` for the full
+ * transcript (the same view the built-in NL judge sees), or any other state
+ * the validator needs.
  */
 export type Validator =
   | string
-  | ((response: Message) => boolean | ValidationOutcome | Promise<boolean | ValidationOutcome>)
+  | ((response: Message, agent: LocalAgent) => boolean | ValidationOutcome | Promise<boolean | ValidationOutcome>)
 
 /** Why a goal run ended. */
 export type GoalStopReason = 'satisfied' | 'maxAttempts' | 'timeout'
@@ -156,9 +160,10 @@ export interface GoalLoopOptions {
    * Builds the user message fed to the agent before each retry. Receives the
    * trimmed validator feedback (or `undefined` if the validator gave none).
    * Override to localize the default English, retune the framing, or embed
-   * feedback in a domain-specific structure.
+   * feedback in a domain-specific structure. Return a string for plain text or
+   * a `ContentBlock[]` to mix in non-text content (e.g. an image block).
    */
-  resumePromptTemplate?: (feedback: string | undefined) => string
+  resumePromptTemplate?: (feedback: string | undefined) => string | ContentBlock[]
 }
 
 /**
@@ -190,13 +195,16 @@ interface RunState {
 /**
  * Tracks which agents already have a GoalLoop attached so a second attachment
  * fails loudly instead of silently overwriting `event.resume` on every After
- * hook (last-writer-wins).
+ * hook (last-writer-wins). Note: this is per-agent, not per-plugin-instance —
+ * one GoalLoop instance can be shared across multiple agents.
  */
 const agentsWithGoalLoop = new WeakSet<LocalAgent>()
 
 /**
- * Iterative-refinement plugin. Construct a separate `GoalLoop` for each `Agent`
- * you attach it to — sharing one instance across multiple agents is not supported.
+ * Iterative-refinement plugin. A single `GoalLoop` instance can be attached to
+ * multiple `Agent`s; per-agent run state is keyed off the agent, so concurrent
+ * runs on different agents don't interfere. Only one GoalLoop is supported per
+ * individual agent — see {@link agentsWithGoalLoop}.
  */
 export class GoalLoop implements Plugin {
   readonly name: string
@@ -206,11 +214,9 @@ export class GoalLoop implements Plugin {
   private readonly _maxAttempts: number
   private readonly _timeout: number
   private readonly _preserveContext: boolean
-  private readonly _resumePromptTemplate: (feedback: string | undefined) => string
-  private _run: RunState | undefined = undefined
-  // Set in `initAgent` before any hook fires.
-  private _validator!: (response: Message) => Promise<ValidationOutcome>
-  private _initialised = false
+  private readonly _resumePromptTemplate: (feedback: string | undefined) => string | ContentBlock[]
+  /** Per-agent run state. Keyed by agent so one plugin instance can serve many. */
+  private readonly _runs = new WeakMap<LocalAgent, RunState>()
 
   constructor(opts: GoalLoopOptions) {
     if ((opts.maxAttempts ?? Infinity) < 1) {
@@ -232,22 +238,17 @@ export class GoalLoop implements Plugin {
   }
 
   /**
-   * Result of the most recent completed run, or `undefined` if no run has finished
-   * since this plugin was constructed. Reads while a run is in-flight, or after a
-   * thrown invoke that left a run half-finished, return `undefined` rather than
-   * stale data — the previous run's snapshot is dropped on the next invoke.
+   * Result of the most recent completed run on `agent`, or `undefined` if no
+   * run has finished on that agent since this plugin was constructed. Reads
+   * while a run is in-flight, or after a thrown invoke that left a run
+   * half-finished, return `undefined` rather than stale data — the previous
+   * run's snapshot is dropped on the next invoke.
    */
-  get lastResult(): GoalResult | undefined {
-    return this._run?.result
+  lastResult(agent: LocalAgent): GoalResult | undefined {
+    return this._runs.get(agent)?.result
   }
 
   initAgent(agent: LocalAgent): void {
-    // Sharing a GoalLoop across agents would silently judge the wrong
-    // transcript (the validator closes over the first agent) or interleave
-    // runs across hosts. Fail loudly.
-    if (this._initialised) {
-      throw new Error(`${this.name}: GoalLoop instances cannot be shared across agents; construct one per agent`)
-    }
     // Two GoalLoops on the same agent both register an AfterInvocationEvent
     // hook and both write `event.resume` — last writer wins, so one's feedback
     // would be silently dropped. Compose constraints in a single validator
@@ -258,19 +259,19 @@ export class GoalLoop implements Plugin {
       )
     }
     agentsWithGoalLoop.add(agent)
-    this._initialised = true
-    this._validator = this._buildValidator(this._validate, agent)
+    const validator = this._buildValidator(this._validate, agent)
 
     // Tells the next After call whether to start a fresh run or continue the
     // current one. Clears stale state from a prior invoke that threw mid-run,
     // and starts a fresh RunState so later hooks (BeforeModelCall, After) can
     // attach to it without each having to lazy-create.
     agent.addHook(BeforeInvocationEvent, () => {
-      if (this._run?.resumed) {
-        this._run.resumed = false
+      const existing = this._runs.get(agent)
+      if (existing?.resumed) {
+        existing.resumed = false
         return
       }
-      this._run = { startTime: Date.now(), attempts: [] }
+      this._runs.set(agent, { startTime: Date.now(), attempts: [] })
     })
 
     // On attempt 1 only, snapshot the model-visible session while
@@ -285,8 +286,9 @@ export class GoalLoop implements Plugin {
     // actually hide prior attempts from the model.
     if (!this._preserveContext) {
       agent.addHook(BeforeModelCallEvent, () => {
-        if (this._run && !this._run.initialSnapshot) {
-          this._run.initialSnapshot = agent.takeSnapshot({ preset: 'session', exclude: ['state'] })
+        const run = this._runs.get(agent)
+        if (run && !run.initialSnapshot) {
+          run.initialSnapshot = agent.takeSnapshot({ preset: 'session', exclude: ['state'] })
         }
       })
     }
@@ -294,7 +296,7 @@ export class GoalLoop implements Plugin {
     // Validates the assistant's reply, terminates the run on pass / budget
     // exhausted, or arms `event.resume` with feedback for another attempt.
     agent.addHook(AfterInvocationEvent, async (event) => {
-      const run = this._run
+      const run = this._runs.get(agent)
       // Defensive: BeforeInvocationEvent always creates a run before this hook
       // fires under normal operation.
       if (!run) return
@@ -316,7 +318,7 @@ export class GoalLoop implements Plugin {
 
       let outcome: ValidationOutcome
       try {
-        outcome = await this._validator(response)
+        outcome = await validator(response)
       } catch (validatorError) {
         // Surface validator throws so a buggy validator (e.g. a TypeError that
         // fails identically on every attempt) is visible in logs rather than
@@ -360,7 +362,7 @@ export class GoalLoop implements Plugin {
   ): (response: Message) => Promise<ValidationOutcome> {
     if (typeof validator === 'function') {
       return async (response) => {
-        const outcome = await validator(response)
+        const outcome = await validator(response, hostAgent)
         if (typeof outcome === 'boolean') return { passed: outcome }
         return outcome
       }
