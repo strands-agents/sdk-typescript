@@ -261,13 +261,21 @@ describe('GoalLoop', () => {
       const a1 = new Agent({ model: m1, plugins: [plugin], printer: false })
       await a1.invoke('first')
       const after1 = plugin.lastResult
-      expect(after1?.stopReason).toBe('satisfied')
+      expect(after1).toEqual({
+        passed: true,
+        stopReason: 'satisfied',
+        attempts: [{ attempt: 1, passed: true }],
+      })
 
       m1.addTurn({ type: 'textBlock', text: 'two' })
       await a1.invoke('second')
       const after2 = plugin.lastResult
       expect(after2).not.toBe(after1)
-      expect(after2?.stopReason).toBe('satisfied')
+      expect(after2).toEqual({
+        passed: true,
+        stopReason: 'satisfied',
+        attempts: [{ attempt: 1, passed: true }],
+      })
     })
 
     it('is undefined after a host throw mid-run', async () => {
@@ -304,7 +312,14 @@ describe('GoalLoop', () => {
       await agent.invoke('go')
 
       expect(observed).toEqual([undefined, undefined])
-      expect(plugin.lastResult?.stopReason).toBe('satisfied')
+      expect(plugin.lastResult).toEqual({
+        passed: true,
+        stopReason: 'satisfied',
+        attempts: [
+          { attempt: 1, passed: false },
+          { attempt: 2, passed: true },
+        ],
+      })
     })
   })
 
@@ -650,8 +665,14 @@ describe('GoalLoop natural-language judge', () => {
 
     await agent.invoke('explain something')
 
-    expect(plugin.lastResult?.passed).toBe(true)
-    expect(plugin.lastResult?.attempts.map((a) => a.feedback)).toEqual(['too long', undefined])
+    expect(plugin.lastResult).toEqual({
+      passed: true,
+      stopReason: 'satisfied',
+      attempts: [
+        { attempt: 1, passed: false, feedback: 'too long' },
+        { attempt: 2, passed: true },
+      ],
+    })
     const userTexts = agent.messages
       .filter((m) => m.role === 'user')
       .flatMap((m) => m.content)
@@ -659,7 +680,7 @@ describe('GoalLoop natural-language judge', () => {
     expect(userTexts.some((t) => t.includes('too long'))).toBe(true)
   })
 
-  it('records a failed attempt with default feedback when judge produces no structured output', async () => {
+  it('passes when the judge replies with plain text first and the structured-output retry yields a tool call', async () => {
     const model = new MockMessageModel()
       .addTurn({ type: 'textBlock', text: 'response' })
       .addTurn({ type: 'textBlock', text: 'judge says hi (no tool)' })
@@ -674,7 +695,11 @@ describe('GoalLoop natural-language judge', () => {
 
     await agent.invoke('go')
 
-    expect(plugin.lastResult?.passed).toBe(true)
+    expect(plugin.lastResult).toEqual({
+      passed: true,
+      stopReason: 'satisfied',
+      attempts: [{ attempt: 1, passed: true }],
+    })
   })
 
   it('builds a fresh judge agent per validation, not leaking prior prompts', async () => {
@@ -700,7 +725,14 @@ describe('GoalLoop natural-language judge', () => {
 
     await agent.invoke('initial')
 
-    expect(plugin.lastResult?.passed).toBe(true)
+    expect(plugin.lastResult).toEqual({
+      passed: true,
+      stopReason: 'satisfied',
+      attempts: [
+        { attempt: 1, passed: false, feedback: 'fb-1' },
+        { attempt: 2, passed: true },
+      ],
+    })
     // Stream calls in order: host-1 (1 msg), judge-1 (1 msg), host-2 (3 msgs:
     // user+assistant+user-feedback), judge-2 (1 msg). The 1s on the judge calls
     // confirm a fresh Agent — accumulated state would push the second to >1.
@@ -723,7 +755,11 @@ describe('GoalLoop natural-language judge', () => {
 
     await agent.invoke('go')
 
-    expect(plugin.lastResult?.passed).toBe(true)
+    expect(plugin.lastResult).toEqual({
+      passed: true,
+      stopReason: 'satisfied',
+      attempts: [{ attempt: 1, passed: true }],
+    })
     expect(hostSpy).toHaveBeenCalledTimes(1)
     expect(judgeSpy).toHaveBeenCalledTimes(1)
   })
