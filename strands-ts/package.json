@@ -95,6 +95,18 @@
     "./vended-plugins": {
       "types": "./dist/src/vended-plugins/index.d.ts",
       "default": "./dist/src/vended-plugins/index.js"
+    },
+    "./sandbox": {
+      "types": "./dist/src/sandbox/index.d.ts",
+      "default": "./dist/src/sandbox/index.js"
+    },
+    "./sandbox/docker": {
+      "types": "./dist/src/sandbox/docker.d.ts",
+      "default": "./dist/src/sandbox/docker.js"
+    },
+    "./sandbox/ssh": {
+      "types": "./dist/src/sandbox/ssh.d.ts",
+      "default": "./dist/src/sandbox/ssh.js"
     }
   },
   "scripts": {

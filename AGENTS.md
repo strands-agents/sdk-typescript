@@ -133,7 +133,9 @@ sdk-typescript/
 │   │   │   ├── __tests__/
 │   │   │   ├── base.ts           # Abstract Sandbox class
 │   │   │   ├── posix-shell.ts    # PosixShellSandbox with shell-based defaults
-│   │   │   ├── stream-process.ts # ChildProcess-to-AsyncGenerator bridge
+│   │   │   ├── docker.ts         # DockerSandbox — runs commands in a Docker container
+│   │   │   ├── ssh.ts            # SshSandbox — runs commands on a remote host via SSH
+│   │   │   ├── stream-process.ts # Process spawn + AsyncGenerator stream bridge
 │   │   │   ├── constants.ts      # Language validation pattern
 │   │   │   └── types.ts          # ExecutionResult, StreamChunk, FileInfo, OutputFile
 │   │   │
