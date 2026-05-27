@@ -1927,7 +1927,7 @@ describe('normalizeToolUseNames', () => {
     })
   })
 
-  describe('budget caps', () => {
+  describe('limits', () => {
     const toolUseTurn = (
       toolUseId: string,
       usage: { inputTokens: number; outputTokens: number; totalTokens: number }
@@ -1947,7 +1947,7 @@ describe('normalizeToolUseNames', () => {
           })
       )
 
-    describe('when maxTurns is reached', () => {
+    describe('when limits.turns is reached', () => {
       it('runs the cycle to completion and bails at top of next iteration', async () => {
         const model = new MockMessageModel()
           .addTurn(...toolUseTurn('tool-1', { inputTokens: 10, outputTokens: 5, totalTokens: 15 }))
@@ -1955,14 +1955,14 @@ describe('normalizeToolUseNames', () => {
 
         const agent = new Agent({ model, tools: [passthroughTool()] })
 
-        const result = await agent.invoke('go', { maxTurns: 1 })
+        const result = await agent.invoke('go', { limits: { turns: 1 } })
 
         // Bail after tools — lastMessage is the user toolResult, so we don't
         // use expectAgentResult (which assumes role 'assistant').
         expect(result).toEqual(
           expect.objectContaining({
             type: 'agentResult',
-            stopReason: 'maxTurnsExceeded',
+            stopReason: 'limitTurns',
             lastMessage: expect.objectContaining({
               role: 'user',
               content: expect.arrayContaining([expect.any(ToolResultBlock)]),
@@ -1977,7 +1977,7 @@ describe('normalizeToolUseNames', () => {
       })
     })
 
-    describe('when budget is generous', () => {
+    describe('when limits is generous', () => {
       it('does not trip and the model ends naturally', async () => {
         const model = new MockMessageModel().addTurn(
           { type: 'textBlock', text: 'done' },
@@ -1985,7 +1985,7 @@ describe('normalizeToolUseNames', () => {
         )
         const agent = new Agent({ model })
 
-        const result = await agent.invoke('go', { maxTurns: 5, maxOutputTokens: 1000, maxTotalTokens: 1000 })
+        const result = await agent.invoke('go', { limits: { turns: 5, outputTokens: 1000, totalTokens: 1000 } })
 
         expect(result).toEqual(
           expectAgentResult({
@@ -1998,20 +1998,20 @@ describe('normalizeToolUseNames', () => {
       })
     })
 
-    describe('when maxOutputTokens is reached', () => {
-      it('returns maxOutputTokensExceeded once cumulative outputTokens hits the cap', async () => {
+    describe('when limits.outputTokens is reached', () => {
+      it('returns limitOutputTokens once cumulative outputTokens hits the cap', async () => {
         const model = new MockMessageModel()
           .addTurn(...toolUseTurn('tool-1', { inputTokens: 10, outputTokens: 60, totalTokens: 70 }))
           .addTurn(...toolUseTurn('tool-2', { inputTokens: 10, outputTokens: 60, totalTokens: 70 }))
 
         const agent = new Agent({ model, tools: [passthroughTool()] })
 
-        const result = await agent.invoke('go', { maxOutputTokens: 100 })
+        const result = await agent.invoke('go', { limits: { outputTokens: 100 } })
 
         expect(result).toEqual(
           expect.objectContaining({
             type: 'agentResult',
-            stopReason: 'maxOutputTokensExceeded',
+            stopReason: 'limitOutputTokens',
             lastMessage: expect.objectContaining({
               role: 'user',
               content: expect.arrayContaining([expect.any(ToolResultBlock)]),
@@ -2032,12 +2032,12 @@ describe('normalizeToolUseNames', () => {
 
         const agent = new Agent({ model, tools: [passthroughTool()] })
 
-        const result = await agent.invoke('go', { maxOutputTokens: 100 })
+        const result = await agent.invoke('go', { limits: { outputTokens: 100 } })
 
         expect(result).toEqual(
           expect.objectContaining({
             type: 'agentResult',
-            stopReason: 'maxOutputTokensExceeded',
+            stopReason: 'limitOutputTokens',
             metrics: expectLoopMetrics({
               cycleCount: 1,
               toolNames: ['loop'],
@@ -2048,20 +2048,20 @@ describe('normalizeToolUseNames', () => {
       })
     })
 
-    describe('when maxTotalTokens is reached', () => {
-      it('returns maxTotalTokensExceeded once cumulative totalTokens hits the cap', async () => {
+    describe('when limits.totalTokens is reached', () => {
+      it('returns limitTotalTokens once cumulative totalTokens hits the cap', async () => {
         const model = new MockMessageModel()
           .addTurn(...toolUseTurn('tool-1', { inputTokens: 200, outputTokens: 100, totalTokens: 300 }))
           .addTurn(...toolUseTurn('tool-2', { inputTokens: 200, outputTokens: 100, totalTokens: 300 }))
 
         const agent = new Agent({ model, tools: [passthroughTool()] })
 
-        const result = await agent.invoke('go', { maxTotalTokens: 500 })
+        const result = await agent.invoke('go', { limits: { totalTokens: 500 } })
 
         expect(result).toEqual(
           expect.objectContaining({
             type: 'agentResult',
-            stopReason: 'maxTotalTokensExceeded',
+            stopReason: 'limitTotalTokens',
             lastMessage: expect.objectContaining({
               role: 'user',
               content: expect.arrayContaining([expect.any(ToolResultBlock)]),
@@ -2076,7 +2076,7 @@ describe('normalizeToolUseNames', () => {
       })
     })
 
-    describe('when the model ends naturally on the same turn the budget would trip', () => {
+    describe('when the model ends naturally on the same turn the limit would trip', () => {
       it('returns endTurn — the model answer wins', async () => {
         const model = new MockMessageModel().addTurn(
           { type: 'textBlock', text: 'final answer' },
@@ -2084,7 +2084,7 @@ describe('normalizeToolUseNames', () => {
         )
         const agent = new Agent({ model })
 
-        const result = await agent.invoke('go', { maxTotalTokens: 500 })
+        const result = await agent.invoke('go', { limits: { totalTokens: 500 } })
 
         expect(result).toEqual(
           expectAgentResult({
@@ -2097,7 +2097,7 @@ describe('normalizeToolUseNames', () => {
       })
     })
 
-    describe('when multiple budgets trip simultaneously', () => {
+    describe('when multiple limits trip simultaneously', () => {
       const heavyUsage = { inputTokens: 100, outputTokens: 100, totalTokens: 200 }
 
       const buildAgent = (): Agent => {
@@ -2107,37 +2107,39 @@ describe('normalizeToolUseNames', () => {
         return new Agent({ model, tools: [passthroughTool()] })
       }
 
-      it('prefers maxTurns when all three trip', async () => {
-        const result = await buildAgent().invoke('go', { maxTurns: 1, maxTotalTokens: 1, maxOutputTokens: 1 })
+      it('prefers turns when all three trip', async () => {
+        const result = await buildAgent().invoke('go', {
+          limits: { turns: 1, totalTokens: 1, outputTokens: 1 },
+        })
 
         expect(result).toEqual(
           expect.objectContaining({
             type: 'agentResult',
-            stopReason: 'maxTurnsExceeded',
+            stopReason: 'limitTurns',
             metrics: expectLoopMetrics({ cycleCount: 1, toolNames: ['loop'] }),
           })
         )
       })
 
-      it('prefers maxTotalTokens over maxOutputTokens', async () => {
-        const result = await buildAgent().invoke('go', { maxTotalTokens: 1, maxOutputTokens: 1 })
+      it('prefers totalTokens over outputTokens', async () => {
+        const result = await buildAgent().invoke('go', { limits: { totalTokens: 1, outputTokens: 1 } })
 
         expect(result).toEqual(
           expect.objectContaining({
             type: 'agentResult',
-            stopReason: 'maxTotalTokensExceeded',
+            stopReason: 'limitTotalTokens',
             metrics: expectLoopMetrics({ cycleCount: 1, toolNames: ['loop'] }),
           })
         )
       })
 
-      it('falls back to maxOutputTokens when no higher-priority cap is set', async () => {
-        const result = await buildAgent().invoke('go', { maxOutputTokens: 1 })
+      it('falls back to outputTokens when no higher-priority cap is set', async () => {
+        const result = await buildAgent().invoke('go', { limits: { outputTokens: 1 } })
 
         expect(result).toEqual(
           expect.objectContaining({
             type: 'agentResult',
-            stopReason: 'maxOutputTokensExceeded',
+            stopReason: 'limitOutputTokens',
             metrics: expectLoopMetrics({ cycleCount: 1, toolNames: ['loop'] }),
           })
         )
@@ -2145,8 +2147,8 @@ describe('normalizeToolUseNames', () => {
     })
 
     describe('when the same agent is reused across invocations', () => {
-      it('scopes the budget to the current invocation, not lifetime', async () => {
-        // Each turn uses 50 output tokens. With maxOutputTokens: 75, a single
+      it('scopes the limit to the current invocation, not lifetime', async () => {
+        // Each turn uses 50 output tokens. With limits.outputTokens: 75, a single
         // invocation tolerates one turn but trips on the second. If the cap
         // were lifetime-scoped, the second `invoke()` would trip on its first
         // turn (75 cumulative across both calls).
@@ -2162,22 +2164,22 @@ describe('normalizeToolUseNames', () => {
 
         const agent = new Agent({ model })
 
-        const r1 = await agent.invoke('go', { maxOutputTokens: 75 })
+        const r1 = await agent.invoke('go', { limits: { outputTokens: 75 } })
         expect(r1.stopReason).toBe('endTurn')
         expect(r1.metrics?.latestAgentInvocation?.cycles.length).toBe(1)
 
-        const r2 = await agent.invoke('go again', { maxOutputTokens: 75 })
+        const r2 = await agent.invoke('go again', { limits: { outputTokens: 75 } })
         expect(r2.stopReason).toBe('endTurn')
         expect(r2.metrics?.latestAgentInvocation?.cycles.length).toBe(1)
       })
     })
 
-    describe('when a budget option is invalid', () => {
+    describe('when a limit is invalid', () => {
       it.each([
-        ['negative', { maxTurns: -1 }],
-        ['zero', { maxTurns: 0 }],
-        ['NaN', { maxOutputTokens: NaN }],
-        ['Infinity', { maxTotalTokens: Infinity }],
+        ['negative', { limits: { turns: -1 } }],
+        ['zero', { limits: { turns: 0 } }],
+        ['NaN', { limits: { outputTokens: NaN } }],
+        ['Infinity', { limits: { totalTokens: Infinity } }],
       ])('rejects %s with TypeError', async (_label, options) => {
         const agent = new Agent({ model: new MockMessageModel().addTurn({ type: 'textBlock', text: 'never reached' }) })
         await expect(agent.invoke('go', options)).rejects.toThrow(TypeError)
@@ -2185,16 +2187,16 @@ describe('normalizeToolUseNames', () => {
     })
 
     describe('when invoked via stream()', () => {
-      it('returns maxTurnsExceeded as the generator return value', async () => {
+      it('returns limitTurns as the generator return value', async () => {
         const model = new MockMessageModel()
           .addTurn(...toolUseTurn('tool-1', { inputTokens: 10, outputTokens: 5, totalTokens: 15 }))
           .addTurn(...toolUseTurn('tool-2', { inputTokens: 10, outputTokens: 5, totalTokens: 15 }))
 
         const agent = new Agent({ model, tools: [passthroughTool()] })
 
-        const { result } = await collectGenerator(agent.stream('go', { maxTurns: 1 }))
+        const { result } = await collectGenerator(agent.stream('go', { limits: { turns: 1 } }))
 
-        expect(result).toEqual(expect.objectContaining({ type: 'agentResult', stopReason: 'maxTurnsExceeded' }))
+        expect(result).toEqual(expect.objectContaining({ type: 'agentResult', stopReason: 'limitTurns' }))
       })
     })
   })

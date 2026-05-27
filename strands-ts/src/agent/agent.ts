@@ -495,58 +495,59 @@ export class Agent implements LocalAgent, InvokableAgent {
   }
 
   /**
-   * Validates the per-invocation budget caps in {@link InvokeOptions}. Called
-   * once at the top of `_stream` so bad inputs fail fast with a clear error
-   * instead of silently no-op'ing (`NaN`, `Infinity`) or tripping pathologically
-   * (zero swallows the user input; negative trips immediately).
+   * Validates the per-invocation budget caps in {@link InvokeOptions.limits}.
+   * Called once at the top of `_stream` so bad inputs fail fast with a clear
+   * error instead of silently no-op'ing (`NaN`, `Infinity`) or tripping
+   * pathologically (zero swallows the user input; negative trips immediately).
    *
    * Each cap, when set, must be a positive finite number. Fractional values
    * are accepted — harmless, and useful for token budgets derived from
    * arithmetic.
    */
-  private _validateMaxBudgets(options: InvokeOptions | undefined): void {
-    if (!options) return
+  private _validateLimits(options: InvokeOptions | undefined): void {
+    if (!options?.limits) return
     const assertPositive = (name: string, value: number | undefined): void => {
       if (value !== undefined && (!Number.isFinite(value) || value <= 0)) {
         throw new TypeError(`${name} must be a positive finite number, got ${value}`)
       }
     }
-    assertPositive('maxTurns', options.maxTurns)
-    assertPositive('maxOutputTokens', options.maxOutputTokens)
-    assertPositive('maxTotalTokens', options.maxTotalTokens)
+    assertPositive('limits.turns', options.limits.turns)
+    assertPositive('limits.outputTokens', options.limits.outputTokens)
+    assertPositive('limits.totalTokens', options.limits.totalTokens)
   }
 
   /**
-   * Evaluates the per-invocation budget caps in {@link InvokeOptions} against
-   * the current invocation's metrics. Called at the top of each agent-loop
-   * iteration, after `_throwIfCancelled` and before `startCycle`.
+   * Evaluates the per-invocation budget caps in {@link InvokeOptions.limits}
+   * against the current invocation's metrics. Called at the top of each
+   * agent-loop iteration, after `_throwIfCancelled` and before `startCycle`.
    *
    * Reads from {@link AgentMetrics.latestAgentInvocation} (scoped to the
    * current invocation) — not `cycleCount` / `accumulatedUsage`, which are
    * lifetime accumulators that would cause caps to fire prematurely on the
    * second `invoke()` call against a reused agent.
    *
-   * Priority on simultaneous trip: maxTurns → maxTotalTokens → maxOutputTokens.
+   * Priority on simultaneous trip: turns → totalTokens → outputTokens.
    *
    * Returns the {@link StopReason} the loop should terminate with, or
    * `undefined` if every configured cap is still within budget.
    */
-  private _checkMaxBudgets(options: InvokeOptions | undefined): StopReason | undefined {
-    if (!options) return undefined
+  private _checkLimits(options: InvokeOptions | undefined): StopReason | undefined {
+    const limits = options?.limits
+    if (!limits) return undefined
     const invocation = this._meter.metrics.latestAgentInvocation
     if (!invocation) return undefined
 
     const cycleCount = invocation.cycles.length
     const { outputTokens, totalTokens } = invocation.usage
 
-    if (options.maxTurns !== undefined && cycleCount >= options.maxTurns) {
-      return 'maxTurnsExceeded'
+    if (limits.turns !== undefined && cycleCount >= limits.turns) {
+      return 'limitTurns'
     }
-    if (options.maxTotalTokens !== undefined && totalTokens >= options.maxTotalTokens) {
-      return 'maxTotalTokensExceeded'
+    if (limits.totalTokens !== undefined && totalTokens >= limits.totalTokens) {
+      return 'limitTotalTokens'
     }
-    if (options.maxOutputTokens !== undefined && outputTokens >= options.maxOutputTokens) {
-      return 'maxOutputTokensExceeded'
+    if (limits.outputTokens !== undefined && outputTokens >= limits.outputTokens) {
+      return 'limitOutputTokens'
     }
     return undefined
   }
@@ -920,7 +921,7 @@ export class Agent implements LocalAgent, InvokableAgent {
     let currentArgs: InvokeArgs | undefined = args
     let result: AgentResult | undefined
 
-    this._validateMaxBudgets(options)
+    this._validateLimits(options)
 
     // Resolve structured output schema from per-invocation options or constructor config
     const structuredOutputSchema = options?.structuredOutputSchema ?? this._structuredOutputSchema
@@ -989,10 +990,10 @@ export class Agent implements LocalAgent, InvokableAgent {
       while (true) {
         this._throwIfCancelled()
 
-        const budgetStopReason = this._checkMaxBudgets(options)
-        if (budgetStopReason) {
+        const limitStopReason = this._checkLimits(options)
+        if (limitStopReason) {
           result = new AgentResult({
-            stopReason: budgetStopReason,
+            stopReason: limitStopReason,
             lastMessage: this.messages.at(-1)!,
             traces: this._tracer.localTraces,
             metrics: this._meter.metrics,

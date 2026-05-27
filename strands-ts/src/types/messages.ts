@@ -658,9 +658,9 @@ export class JsonBlock implements JsonBlockData, JSONSerializable<JsonBlockData>
  * - `guardrailIntervened` - A guardrail policy stopped generation
  * - `interrupt` - Agent execution was interrupted for human input
  * - `maxTokens` - The model provider's per-call token cap was reached
- * - `maxOutputTokensExceeded` - Agent loop stopped because `InvokeOptions.maxOutputTokens` was reached
- * - `maxTotalTokensExceeded` - Agent loop stopped because `InvokeOptions.maxTotalTokens` was reached
- * - `maxTurnsExceeded` - Agent loop stopped because `InvokeOptions.maxTurns` was reached
+ * - `limitOutputTokens` - Agent loop stopped because `InvokeOptions.limits.outputTokens` was reached
+ * - `limitTotalTokens` - Agent loop stopped because `InvokeOptions.limits.totalTokens` was reached
+ * - `limitTurns` - Agent loop stopped because `InvokeOptions.limits.turns` was reached
  * - `pauseTurn` - Model paused a long-running turn; the response should be sent back to continue
  * - `refusal` - A streaming classifier intervened to handle a potential policy violation
  * - `stopSequence` - A stop sequence was encountered
@@ -674,9 +674,9 @@ export type StopReason =
   | 'guardrailIntervened'
   | 'interrupt'
   | 'maxTokens'
-  | 'maxOutputTokensExceeded'
-  | 'maxTotalTokensExceeded'
-  | 'maxTurnsExceeded'
+  | 'limitOutputTokens'
+  | 'limitTotalTokens'
+  | 'limitTurns'
   | 'pauseTurn'
   | 'refusal'
   | 'stopSequence'
