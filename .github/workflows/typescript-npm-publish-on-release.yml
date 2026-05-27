@@ -1,4 +1,4 @@
-name: Publish NPM Package
+name: "TypeScript: Publish NPM Package"
 
 on:
   release:
@@ -7,14 +7,16 @@ on:
 
 jobs:
   call-ts-check:
-    uses: ./.github/workflows/ts-check.yml
+    if: startsWith(github.event.release.tag_name, 'typescript/v')
+    uses: ./.github/workflows/typescript-ts-check.yml
     permissions:
       contents: read
     with:
       ref: ${{ github.event.release.target_commitish }}
 
   call-ts-test:
-    uses: ./.github/workflows/ts-test.yml
+    if: startsWith(github.event.release.tag_name, 'typescript/v')
+    uses: ./.github/workflows/typescript-ts-test.yml
     permissions:
       contents: read
     with:
@@ -22,6 +24,7 @@ jobs:
 
   publish:
     name: Build and publish to NPM
+    if: startsWith(github.event.release.tag_name, 'typescript/v')
     needs:
       - call-ts-check
       - call-ts-test
@@ -52,7 +55,7 @@ jobs:
     - name: Extract version from tag
       id: version
       run: |
-        VERSION=${GITHUB_REF#refs/tags/v}
+        VERSION=${GITHUB_REF#refs/tags/typescript/v}
         echo "version=$VERSION" >> $GITHUB_OUTPUT
         echo "Extracted version: $VERSION"
 

@@ -12,7 +12,7 @@
 # hoists, then type-check and run a consumer script that touches the public
 # surface. A missing optional peer fails at module load the same way it would
 # for an end user.
-name: Test Package Pack
+name: "TypeScript: Test Package Pack"
 
 on:
   workflow_call:

@@ -12,7 +12,7 @@ jobs:
     name: strandly check --py
     permissions:
       contents: read
-    runs-on: ubuntu-latest
+    runs-on: macos-latest
 
     steps:
       - name: Checkout code
@@ -32,18 +32,21 @@ jobs:
         with:
           python-version: "3.12"
 
+      - name: Install wasm-tools
+        run: brew install wasm-tools
+
       - name: Bootstrap strandly + venv
         run: |
-          npm ci --include=optional
-          npm install --no-save --ignore-scripts @oxc-parser/binding-linux-x64-gnu
+          npm ci
+          echo "$GITHUB_WORKSPACE/node_modules/.bin" >> "$GITHUB_PATH"
           python -m venv .venv
           .venv/bin/pip install -e .
 
       - name: Build strands-wasm
-        run: npx strandly build --wasm
+        run: strandly build --wasm
 
       - name: Install strands-py-wasm
         run: .venv/bin/pip install -e strands-py-wasm
 
       - name: strandly check --py
-        run: npx strandly check --py
+        run: strandly check --py

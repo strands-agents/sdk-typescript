@@ -1,9 +1,18 @@
-name: Secure Integration test
+name: "TypeScript: Secure Integration Test"
 
 on:
   pull_request_target:
     branches: [main]
-  merge_group: # Run tests in merge queue
+    paths:
+      - 'strands-ts/**'
+      - 'strands-wasm/**'
+      - 'strands-py-wasm/**'
+      - 'strandly/**'
+      - 'wit/**'
+      - 'package.json'
+      - 'package-lock.json'
+      - '.github/workflows/typescript-*'
+  merge_group:
     types: [checks_requested]
 jobs:
   authorization-check:

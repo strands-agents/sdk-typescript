@@ -1,4 +1,4 @@
-name: Test
+name: "TypeScript: Test"
 
 on:
   workflow_call:

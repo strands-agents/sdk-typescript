@@ -13,7 +13,7 @@
   },
   "scripts": {
     "dev": "strandly",
-    "prepare": "husky && npm run build",
+    "prepare": "husky",
     "build": "npm run build -w strands-ts",
     "test": "npm run test -w strands-ts",
     "test:coverage": "npm run test:coverage -w strands-ts",

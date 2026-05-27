@@ -15,6 +15,7 @@ target/
 
 # Python
 __pycache__/
+__pycache__*
 .pycache/
 .pytest_cache/
 .ruff_cache/
@@ -64,12 +65,14 @@ Thumbs.db
 **/test/.artifacts
 
 # Misc
+*.bak
 *.backup
 **/mutants.out*/
 bin/
 
 # LLM
 CLAUDE.md
+.claude/settings.local.json
 
 # dev
 .vitest*
