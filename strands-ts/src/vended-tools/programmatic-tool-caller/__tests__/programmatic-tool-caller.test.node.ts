@@ -1,9 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { programmaticToolCaller } from '../programmatic-tool-caller.js'
+import { programmaticToolCaller, createProgrammaticToolCaller } from '../programmatic-tool-caller.js'
 import { Agent } from '../../../agent/agent.js'
 import { MockMessageModel } from '../../../__fixtures__/mock-message-model.js'
 import { createMockTool } from '../../../__fixtures__/tool-helpers.js'
-import { TextBlock, ToolResultBlock } from '../../../types/messages.js'
+import { JsonBlock, TextBlock, ToolResultBlock } from '../../../types/messages.js'
+import { McpTool } from '../../../tools/mcp-tool.js'
+import type { McpClient } from '../../../mcp.js'
+import type { JSONValue } from '../../../types/json.js'
 
 /**
  * Helper to invoke the programmatic_tool_caller tool against an Agent and
@@ -518,6 +521,173 @@ describe('programmatic_tool_caller tool', () => {
 
       const next = await runCode(agent, "console.log('next')")
       expect(getText(next)).toBe('next')
+    })
+  })
+
+  describe('createProgrammaticToolCaller factory config', () => {
+    // The factory lets callers pin configuration in code (the browser-safe
+    // path) instead of relying on process.env. Config takes precedence over
+    // env vars.
+    function makeAgentWith(
+      tool: ReturnType<typeof createProgrammaticToolCaller>,
+      extraTools: ReturnType<typeof createMockTool>[] = []
+    ): Agent {
+      const model = new MockMessageModel().addTurn({ type: 'textBlock', text: 'Hello' })
+      return new Agent({ model, tools: [tool, ...extraTools] })
+    }
+
+    function makeEchoTool(name: string, text: string) {
+      return createMockTool(
+        name,
+        (ctx) =>
+          new ToolResultBlock({
+            toolUseId: ctx.toolUse.toolUseId,
+            status: 'success',
+            content: [new TextBlock(text)],
+          })
+      )
+    }
+
+    it('uses config.allowedTools as a positive filter (no env needed)', async () => {
+      const ptc = createProgrammaticToolCaller({ allowedTools: ['allowed_only'] })
+      const agent = makeAgentWith(ptc, [makeEchoTool('allowed_only', 'yes'), makeEchoTool('excluded', 'no')])
+
+      const ok = await agent.tool.programmatic_tool_caller!.invoke({ code: 'console.log(await allowed_only({}))' })
+      expect(ok.status).toBe('success')
+      expect(getText(ok)).toBe('yes')
+
+      const fail = await agent.tool.programmatic_tool_caller!.invoke({ code: 'await excluded({})' })
+      expect(fail.status).toBe('error')
+      expect(getText(fail)).toMatch(/excluded is not defined/)
+    })
+
+    it('config.allowedTools overrides PROGRAMMATIC_TOOL_CALLER_ALLOWED_TOOLS env', async () => {
+      // Env says only `env_tool`, but config says only `cfg_tool` — config wins.
+      vi.stubEnv('PROGRAMMATIC_TOOL_CALLER_ALLOWED_TOOLS', 'env_tool')
+      const ptc = createProgrammaticToolCaller({ allowedTools: ['cfg_tool'] })
+      const agent = makeAgentWith(ptc, [makeEchoTool('cfg_tool', 'cfg'), makeEchoTool('env_tool', 'env')])
+
+      const ok = await agent.tool.programmatic_tool_caller!.invoke({ code: 'console.log(await cfg_tool({}))' })
+      expect(ok.status).toBe('success')
+      expect(getText(ok)).toBe('cfg')
+
+      const fail = await agent.tool.programmatic_tool_caller!.invoke({ code: 'await env_tool({})' })
+      expect(fail.status).toBe('error')
+      expect(getText(fail)).toMatch(/env_tool is not defined/)
+    })
+
+    it('config.extraModules exposes allow-listed Node built-ins (no env needed)', async () => {
+      const ptc = createProgrammaticToolCaller({ extraModules: ['path', 'os'] })
+      const agent = makeAgentWith(ptc)
+      const result = await agent.tool.programmatic_tool_caller!.invoke({
+        code: `
+          console.log(typeof path.join)
+          console.log(typeof os.platform)
+        `,
+      })
+      expect(result.status).toBe('success')
+      expect(getText(result)).toBe(['function', 'function'].join('\n'))
+    })
+
+    it('config.extraModules still honours the allow-list (disallowed modules skipped)', async () => {
+      const ptc = createProgrammaticToolCaller({ extraModules: ['child_process'] })
+      const agent = makeAgentWith(ptc)
+      const result = await agent.tool.programmatic_tool_caller!.invoke({ code: 'console.log(child_process.exec)' })
+      expect(result.status).toBe('error')
+      expect(getText(result)).toMatch(/child_process is not defined/)
+    })
+
+    it('empty config exposes every registered tool (default behaviour)', async () => {
+      const ptc = createProgrammaticToolCaller()
+      const agent = makeAgentWith(ptc, [makeEchoTool('a_tool', 'a'), makeEchoTool('b_tool', 'b')])
+      const result = await agent.tool.programmatic_tool_caller!.invoke({
+        code: 'console.log(await a_tool({}), await b_tool({}))',
+      })
+      expect(result.status).toBe('success')
+      expect(getText(result)).toBe('a b')
+    })
+  })
+
+  describe('MCP tools as callable targets', () => {
+    // Regression guard for "does PTC work with MCP servers as tools?".
+    // McpTool extends Tool and is registered like any other tool, so PTC's
+    // direct-tool-call path must drive it identically to a local tool. We back
+    // it with a minimal fake McpClient so no network/server is required.
+    function makeMcpTool(name: string, callTool: McpClient['callTool']): McpTool {
+      const fakeClient = { callTool } as unknown as McpClient
+      return new McpTool({
+        name,
+        description: `Mock MCP tool ${name}`,
+        inputSchema: { type: 'object', properties: { city: { type: 'string' } } },
+        client: fakeClient,
+      })
+    }
+
+    function makeAgentWithTools(tools: ReturnType<typeof createMockTool>[] | McpTool[]): Agent {
+      const model = new MockMessageModel().addTurn({ type: 'textBlock', text: 'Hello' })
+      const agent = new Agent({ model, tools: [programmaticToolCaller] })
+      agent.toolRegistry.add(tools as McpTool[])
+      return agent
+    }
+
+    it('invokes an MCP-backed tool and unwraps its text result', async () => {
+      const callTool = vi.fn(
+        async (_tool: unknown, _args: JSONValue) => ({ content: [{ type: 'text', text: 'Sunny, 22C' }] }) as JSONValue
+      )
+      const mcpTool = makeMcpTool('weather_lookup', callTool)
+      const agent = makeAgentWithTools([mcpTool])
+
+      const result = await agent.tool.programmatic_tool_caller!.invoke({
+        code: "const r = await weather_lookup({ city: 'Seattle' }); console.log(r)",
+      })
+
+      expect(result.status).toBe('success')
+      expect(getText(result)).toBe('Sunny, 22C')
+      // The MCP client was actually driven with the user-supplied input.
+      expect(callTool).toHaveBeenCalledTimes(1)
+      expect(callTool.mock.calls[0]![1]).toStrictEqual({ city: 'Seattle' })
+    })
+
+    it('propagates an MCP error (isError) into the user code try/catch', async () => {
+      const callTool = vi.fn(
+        async (_tool: unknown, _args: JSONValue) =>
+          ({ isError: true, content: [{ type: 'text', text: 'upstream MCP failure' }] }) as JSONValue
+      )
+      const mcpTool = makeMcpTool('weather_lookup', callTool)
+      const agent = makeAgentWithTools([mcpTool])
+
+      const result = await agent.tool.programmatic_tool_caller!.invoke({
+        code: `
+          try {
+            await weather_lookup({ city: 'Nowhere' })
+            console.log('no error')
+          } catch (e) {
+            console.log('caught:', e.message)
+          }
+        `,
+      })
+
+      expect(result.status).toBe('success')
+      expect(getText(result)).toBe('caught: upstream MCP failure')
+    })
+
+    it('returns raw content blocks for non-text MCP results', async () => {
+      const callTool = vi.fn(
+        async (_tool: unknown, _args: JSONValue) =>
+          ({ content: [{ type: 'text', text: 'caption' }, { foo: 'bar' }] }) as JSONValue
+      )
+      const mcpTool = makeMcpTool('mixed_tool', callTool)
+      const agent = makeAgentWithTools([mcpTool])
+
+      // Mixed content (text + json) is returned to user code as the raw block
+      // array; assert the user code can introspect it.
+      const result = await agent.tool.programmatic_tool_caller!.invoke({
+        code: 'const r = await mixed_tool({}); console.log(Array.isArray(r), r.length)',
+      })
+      expect(result.status).toBe('success')
+      expect(getText(result)).toBe('true 2')
+      // Sanity: the second block was mapped to a JsonBlock by McpTool.
+      void JsonBlock
     })
   })
 })

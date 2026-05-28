@@ -10,14 +10,8 @@ TypeScript port of Python's [`programmatic_tool_caller`][py-pr] from `strands-ag
 **This tool executes arbitrary JavaScript without a sandbox.**
 
 - Only use with trusted agents/inputs.
-- Code runs with the full permissions of the Node.js process — full filesystem, network, and child-process access. The `PROGRAMMATIC_TOOL_CALLER_EXTRA_MODULES` allow-list **only controls which Node built-ins are pre-bound as namespace identifiers**; it does _not_ prevent user code from calling `await import('child_process')` or accessing globals like `process` and `globalThis`.
-- For untrusted callers, deploy behind a sandbox (container, VM, separate process with seccomp).
-
-By default the tool **does not prompt** for confirmation — there is no
-vended-tool-level interactive prompt helper in the SDK (`bash` follows the same
-permissive pattern). When `BYPASS_TOOL_CONSENT` is unset, a single `logger.warn`
-line previewing the code is emitted before execution; treat your logs as the
-audit trail.
+- Code runs with the full permissions of the host JS runtime — under Node.js that means full filesystem, network, and child-process access. The `extraModules` allow-list **only controls which Node built-ins are pre-bound as namespace identifiers**; it does _not_ prevent user code from calling `await import('child_process')` or accessing globals like `process` and `globalThis`.
+- For untrusted callers, deploy behind a sandbox (container, VM, separate process with seccomp), and/or gate execution with an intervention handler (see [Human-in-the-loop](#human-in-the-loop--consent)).
 
 ## Why
 
@@ -30,10 +24,15 @@ similar to Anthropic's Programmatic Tool Calling feature.
 ## Installation
 
 ```typescript
-import { programmaticToolCaller } from '@strands-agents/sdk/vended-tools/programmatic-tool-caller'
+import {
+  programmaticToolCaller,
+  createProgrammaticToolCaller,
+} from '@strands-agents/sdk/vended-tools/programmatic-tool-caller'
 ```
 
 ## Usage
+
+Drop the default instance straight into an agent:
 
 ```typescript
 import { Agent } from '@strands-agents/sdk'
@@ -73,11 +72,87 @@ the buffer, **not** to real stdout/stderr.
 > **Note (best-effort capture):** the capture only intercepts the `console`
 > binding inside the user function. User code can still bypass it deliberately
 > via `globalThis.console.log(...)`, `process.stdout.write(...)`, or by using
-> any module exposed through `PROGRAMMATIC_TOOL_CALLER_EXTRA_MODULES` that
-> writes directly to a stream. Likewise, async work that resolves _after_ the
-> tool returns (e.g. an unawaited `setTimeout`) will write to the buffer after
-> it has already been read — those writes are silently dropped. Treat capture
-> as test-isolation and log-tidiness, not a security boundary.
+> any module exposed through `extraModules` that writes directly to a stream.
+> Likewise, async work that resolves _after_ the tool returns (e.g. an
+> unawaited `setTimeout`) will write to the buffer after it has already been
+> read — those writes are silently dropped. Treat capture as test-isolation
+> and log-tidiness, not a security boundary.
+
+## Configuration
+
+Configuration is provided **in code** via `createProgrammaticToolCaller(config)`.
+This is the recommended pattern: it is explicit, type-checked, and works in any
+runtime (including the browser). For convenience, the default `programmaticToolCaller`
+instance also reads two environment variables as a **Node-only fallback**.
+
+```typescript
+import { createProgrammaticToolCaller } from '@strands-agents/sdk/vended-tools/programmatic-tool-caller'
+
+const ptc = createProgrammaticToolCaller({
+  // Only these tools are callable from the generated code. Omit to expose all.
+  allowedTools: ['calculator', 'search'],
+  // Node built-ins to expose (drawn from the allow-list below).
+  extraModules: ['path', 'crypto'],
+})
+
+const agent = new Agent({ model, tools: [ptc, calculator, search] })
+```
+
+| Option / env var                                          | Purpose                                                                                                                                                                                                                                                                               |
+| --------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `allowedTools` / `PROGRAMMATIC_TOOL_CALLER_ALLOWED_TOOLS` | Allow-list of tool names the code may call. Default: every registered tool except `programmatic_tool_caller`.                                                                                                                                                                         |
+| `extraModules` / `PROGRAMMATIC_TOOL_CALLER_EXTRA_MODULES` | Node built-ins to expose. Allow-list: `fs`, `fs/promises`, `path`, `crypto`, `url`, `util`, `querystring`, `os`, `buffer`, `stream`, `events`. Names with non-identifier chars are normalized (`fs/promises` → `fs_promises`). Anything outside the allow-list is logged and skipped. |
+
+**Precedence:** config object **>** environment variable **>** default. The env
+vars are comma-separated and are only consulted under Node.js — in the browser
+(where `process` is undefined) they are ignored entirely, so always pass a config
+object for browser targets.
+
+### Why config-over-env, and what about the browser?
+
+Reading `process.env` directly is **not browser-safe** — a bare
+`process.env.X` reference throws `ReferenceError: process is not defined` in a
+browser bundle. This tool therefore:
+
+1. Treats the **config object as the source of truth** (works everywhere), and
+2. Guards every env read behind a `typeof process !== 'undefined'` check, so the
+   env fallback simply no-ops outside Node instead of crashing.
+
+The other vended tools (`bash`, `http-request`, …) take their parameters as tool
+input or constructor config rather than env vars; `createProgrammaticToolCaller`
+follows that same convention while keeping the env fallback for parity with the
+Python tool and for zero-config Node usage.
+
+## Human-in-the-loop / consent
+
+This tool has **no internal confirmation prompt** and **no `BYPASS_TOOL_CONSENT`
+switch**. In the TS SDK, gating tool execution is the job of an
+**intervention handler**, not each individual tool. To require approval before
+`programmatic_tool_caller` runs (it executes arbitrary code, so this is a good
+idea for interactive deployments), register an `InterventionHandler` that
+overrides `beforeToolCall`:
+
+```typescript
+import { InterventionHandler, InterventionActions } from '@strands-agents/sdk'
+
+class ConfirmProgrammaticCalls extends InterventionHandler {
+  readonly name = 'confirm-ptc'
+
+  override beforeToolCall(event) {
+    if (event.toolUse.name === 'programmatic_tool_caller') {
+      return InterventionActions.confirm({
+        message: `Run this code?\n${event.toolUse.input.code}`,
+      })
+    }
+    return InterventionActions.proceed()
+  }
+}
+
+const agent = new Agent({ model, tools: [programmaticToolCaller], interventions: [new ConfirmProgrammaticCalls()] })
+```
+
+This keeps consent policy composable and in one place, rather than baked into
+the tool.
 
 ## Tool exposure rules
 
@@ -101,13 +176,15 @@ Tool calls inside the user code:
    - Mixed/non-text content → returns the raw `content` array.
    - Empty content → returns `''`.
 
-## Environment variables
+### MCP tools
 
-| Variable                                 | Purpose                                                                                                                                                                                                                                                                                                                                                |
-| ---------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `PROGRAMMATIC_TOOL_CALLER_ALLOWED_TOOLS` | Comma-separated allow-list of tool names the user code may call. Default: every registered tool except `programmatic_tool_caller`.                                                                                                                                                                                                                     |
-| `PROGRAMMATIC_TOOL_CALLER_EXTRA_MODULES` | Comma-separated allow-listed Node built-ins to expose. Allow-list: `fs`, `fs/promises`, `path`, `crypto`, `url`, `util`, `querystring`, `os`, `buffer`, `stream`, `events`. Module names with non-identifier characters are normalized to valid JS identifiers (`fs/promises` → `fs_promises`). Anything outside the allow-list is logged and skipped. |
-| `BYPASS_TOOL_CONSENT`                    | If unset, a `logger.warn` previews the code before execution. (Set to `"true"` to suppress the warning.)                                                                                                                                                                                                                                               |
+MCP server tools work transparently. `McpTool` extends the same `Tool` base
+class and is registered like any local tool, so the model can call an MCP tool
+(`await some_mcp_tool({ ... })`) exactly like a local one — the direct-tool-call
+path drives `McpTool.stream` → `McpClient.callTool` underneath. MCP errors
+(`isError: true`) surface as thrown errors inside the user code, and non-text
+MCP content (images, embedded resources) is returned as the raw content-block
+array. This is covered by committed tests.
 
 ## Tool name compatibility
 
@@ -128,11 +205,11 @@ them via `programmatic_tool_caller`.
 The following identifiers cannot be shadowed by tools:
 
 - `console` — always reserved (capture buffer).
-- Any module name actually injected via `PROGRAMMATIC_TOOL_CALLER_EXTRA_MODULES`.
+- Any module name actually injected via `extraModules` / `PROGRAMMATIC_TOOL_CALLER_EXTRA_MODULES`.
 
 If a tool's name (or its underscore-normalized form) clashes, the tool returns
 `status: 'error'` with a clear message naming the offending tools and the full
-reserved set. Rename or filter via `PROGRAMMATIC_TOOL_CALLER_ALLOWED_TOOLS`.
+reserved set. Rename or filter via the `allowedTools` config.
 
 ## Parity with the Python tool
 
@@ -144,19 +221,23 @@ reserved set. Rename or filter via `PROGRAMMATIC_TOOL_CALLER_ALLOWED_TOOLS`.
 | Always-injected module | `asyncio`                                          | `console` (capture)                                                           |
 | Tool name → identifier | identity (Python tool names are valid identifiers) | hyphen → underscore (always); original name kept too if a valid JS identifier |
 | Tool unwrapping        | `_execute_tool`                                    | `unwrapToolResult` (same rules)                                               |
-| Allow-list env var     | `PROGRAMMATIC_TOOL_CALLER_ALLOWED_TOOLS`           | identical                                                                     |
-| Extra modules env var  | `PROGRAMMATIC_TOOL_CALLER_EXTRA_MODULES`           | identical (Node-builtins allow-list)                                          |
+| Allow-list config      | `PROGRAMMATIC_TOOL_CALLER_ALLOWED_TOOLS`           | `allowedTools` config (env fallback identical)                                |
+| Extra modules config   | `PROGRAMMATIC_TOOL_CALLER_EXTRA_MODULES`           | `extraModules` config (env fallback identical, Node-builtins allow-list)      |
 | Reserved names         | `asyncio`, `__name__`, plus extras                 | `console`, plus extras                                                        |
-| Confirmation prompt    | `get_user_input`                                   | `logger.warn` (no vended-tool prompt helper in TS SDK)                        |
+| Confirmation prompt    | `get_user_input` / `BYPASS_TOOL_CONSENT`           | intervention handler (`beforeToolCall` → `confirm`); no in-tool prompt        |
 | Output capture         | `StringIO` redirect of `sys.stdout`/`stderr`       | overridden `console` shadow                                                   |
 | Empty output           | `(no output)`                                      | `(no output)`                                                                 |
 | Inner call recording   | `record_direct_tool_call=False`                    | `recordDirectToolCall: false`                                                 |
 
 ## Limitations
 
-- **No human-in-the-loop**: tools that interrupt for human input are not
-  supported — direct/programmatic tool calls cannot be paused. An interrupt
-  surfaces as a thrown error inside the user code.
+- **No human-in-the-loop _inside_ the code**: tools that interrupt for human
+  input cannot be paused mid-script — direct/programmatic tool calls cannot be
+  suspended. An interrupt surfaces as a thrown error inside the user code.
+  (Gating the _whole_ `programmatic_tool_caller` call via an intervention
+  handler is supported — see above.)
 - **No sandboxing**: see security warning.
-- **Node.js only**: relies on `util.inspect` and dynamic `import()` of Node
-  built-ins.
+- **Node.js only at runtime**: relies on `util.inspect` and dynamic `import()`
+  of Node built-ins. The tool is browser-safe to _construct_ and configure, but
+  the `extraModules` Node built-ins and `util.inspect`-based formatting assume a
+  Node runtime.
