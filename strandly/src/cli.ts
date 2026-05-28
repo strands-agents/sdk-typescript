@@ -151,6 +151,28 @@ program
     }
   })
 
+program
+  .command('benchmark')
+  .description('Run agent benchmarks')
+  .requiredOption('--suite <name>', 'Benchmark suite to run (contextbench)')
+  .option('--config <name>', 'Run specific config only')
+  .option('--agent-file <path>', 'Path to a .ts file exporting a BenchmarkConfig')
+  .option('--task <id>', 'Task ID within the suite')
+  .option('--model <id>', 'Model ID for built-in configs (default: us.anthropic.claude-sonnet-4-20250514-v1:0)')
+  .option('--min-coverage <n>', 'Minimum file coverage (0-1). Fails if below this.')
+  .option('--output <path>', 'Write JSON results to file')
+  .option('--output-md <path>', 'Write markdown summary to file')
+  .option('--cloudwatch', 'Emit metrics to CloudWatch')
+  .action(async (opts) => {
+    const minCoverage = opts.minCoverage ? parseFloat(opts.minCoverage) : undefined
+    if (minCoverage !== undefined && (isNaN(minCoverage) || minCoverage < 0 || minCoverage > 1)) {
+      console.error('--min-coverage must be a number between 0 and 1')
+      process.exit(1)
+    }
+    const { benchmark } = await import('./benchmark/index.js')
+    await benchmark({ ...opts, minCoverage, model: opts.model })
+  })
+
 program.parse()
 
 function run(cmd: string, opts?: { cwd?: string; env?: Record<string, string> }): void {
