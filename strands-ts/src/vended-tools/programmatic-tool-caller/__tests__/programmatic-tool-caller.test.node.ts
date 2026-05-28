@@ -597,6 +597,16 @@ describe('programmatic_tool_caller tool', () => {
       expect(getText(result)).toMatch(/child_process is not defined/)
     })
 
+    it('config.allowedTools: [] exposes NO tools (explicit empty allow-list, distinct from undefined)', async () => {
+      // `[] ?? env` returns `[]` (empty array is not nullish), so an explicit
+      // empty list must filter every tool out — it is NOT treated as "unset".
+      const ptc = createProgrammaticToolCaller({ allowedTools: [] })
+      const agent = makeAgentWith(ptc, [makeEchoTool('some_tool', 'x')])
+      const result = await agent.tool.programmatic_tool_caller!.invoke({ code: 'await some_tool({})' })
+      expect(result.status).toBe('error')
+      expect(getText(result)).toMatch(/some_tool is not defined/)
+    })
+
     it('empty config exposes every registered tool (default behaviour)', async () => {
       const ptc = createProgrammaticToolCaller()
       const agent = makeAgentWith(ptc, [makeEchoTool('a_tool', 'a'), makeEchoTool('b_tool', 'b')])
