@@ -270,14 +270,12 @@ export type { ElicitationCallback, ElicitationContext } from './types/elicitatio
 // Memory management
 export { MemoryManager } from './memory/index.js'
 export type {
-  KnowledgeEntry,
-  KnowledgeStore,
+  MemoryEntry,
+  MemoryStore,
   SearchOptions,
   MemorySearchOptions,
   MemoryStoreOptions,
-  StoreConfig,
   MemoryToolConfig,
-  MemoryToolsConfig,
   MemoryManagerConfig,
 } from './memory/index.js'
 

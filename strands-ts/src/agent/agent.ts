@@ -69,7 +69,7 @@ import type { AgentAsToolOptions } from './agent-as-tool.js'
 
 import type { z } from 'zod'
 import { MemoryManager } from '../memory/memory-manager.js'
-import type { MemoryManagerConfig } from '../memory/types.js'
+import type { MemoryManagerConfig } from '../memory/index.js'
 import { SessionManager } from '../session/session-manager.js'
 import { Tracer } from '../telemetry/tracer.js'
 import { Meter } from '../telemetry/meter.js'

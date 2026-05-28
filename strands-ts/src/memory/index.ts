@@ -1,12 +1,10 @@
 export { MemoryManager } from './memory-manager.js'
 export type {
-  KnowledgeEntry,
-  KnowledgeStore,
+  MemoryEntry,
+  MemoryStore,
   SearchOptions,
   MemorySearchOptions,
   MemoryStoreOptions,
-  StoreConfig,
   MemoryToolConfig,
-  MemoryToolsConfig,
   MemoryManagerConfig,
 } from './types.js'
