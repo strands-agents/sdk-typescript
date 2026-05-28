@@ -108,6 +108,25 @@ export interface GoalResult {
   attempts: readonly GoalAttempt[]
 }
 
+/**
+ * Tuning for the auto-built judge used when {@link GoalLoopOptions.validate} is
+ * a string. Harmlessly ignored when `validate` is a function — no judge is built
+ * in that case.
+ */
+export interface JudgeConfig {
+  /**
+   * Model the judge agent uses. Defaults to the host agent's model. Consider
+   * passing a cheaper or faster model (e.g. Haiku) to keep judging cheap.
+   */
+  model?: Model
+  /**
+   * System prompt for the judge agent. Defaults to {@link JUDGE_SYSTEM_PROMPT}.
+   * Override to retune the judging rubric, localize the instructions, or
+   * tighten/relax the pass criteria.
+   */
+  systemPrompt?: string
+}
+
 /** Configuration for {@link GoalLoop}. */
 export interface GoalLoopOptions {
   /**
@@ -115,12 +134,8 @@ export interface GoalLoopOptions {
    * Agent grades the response. Pass a function for a programmatic predicate.
    */
   validate: Validator
-  /**
-   * Model used by the auto-built judge when `validate` is a string. Defaults to
-   * the host agent's model. Consider passing a cheaper or faster model.
-   * Harmlessly ignored when `validate` is a function — no judge is built in that case.
-   */
-  evaluatorModel?: Model
+  /** Tuning for the auto-built judge used when `validate` is a string. */
+  judge?: JudgeConfig
   /** Max attempts. Defaults to `Infinity`. `warnOnce` when both this and `timeout` are unbounded. */
   maxAttempts?: number
   /**
@@ -210,7 +225,8 @@ export class GoalLoop implements Plugin {
   readonly name: string
 
   private readonly _validate: Validator
-  private readonly _evaluatorModel?: Model
+  private readonly _judgeModel?: Model
+  private readonly _judgeSystemPrompt: string
   private readonly _maxAttempts: number
   private readonly _timeout: number
   private readonly _preserveContext: boolean
@@ -227,7 +243,8 @@ export class GoalLoop implements Plugin {
     }
     this.name = opts.name ?? 'strands:goal-loop'
     this._validate = opts.validate
-    if (opts.evaluatorModel !== undefined) this._evaluatorModel = opts.evaluatorModel
+    if (opts.judge?.model !== undefined) this._judgeModel = opts.judge.model
+    this._judgeSystemPrompt = opts.judge?.systemPrompt ?? JUDGE_SYSTEM_PROMPT
     this._maxAttempts = opts.maxAttempts ?? Infinity
     this._timeout = opts.timeout ?? Infinity
     this._preserveContext = opts.preserveContext ?? true
@@ -373,9 +390,9 @@ export class GoalLoop implements Plugin {
     // can evaluate against context, not just the last assistant turn.
     return async () => {
       const judge = new Agent({
-        model: this._evaluatorModel ?? hostAgent.model,
+        model: this._judgeModel ?? hostAgent.model,
         printer: false,
-        systemPrompt: JUDGE_SYSTEM_PROMPT,
+        systemPrompt: this._judgeSystemPrompt,
       })
       const judgeResult = await judge.invoke(buildJudgePrompt(goalDescription, hostAgent.messages), {
         structuredOutputSchema: JUDGE_OUTCOME_SCHEMA,
@@ -401,9 +418,14 @@ function finishRun(run: RunState, stopReason: GoalStopReason): void {
 
 function defaultResumePrompt(feedback: string | undefined): string {
   if (!feedback) {
-    return 'Your previous attempt did not satisfy the goal. Refine your response and try again.'
+    return 'Your previous attempt did not satisfy the goal. Produce a new, corrected response that fully satisfies it — do not restate or lightly edit the previous attempt.'
   }
-  return `Your previous attempt did not satisfy the goal.\n\nValidator feedback:\n${feedback}\n\nRefine your response and try again.`
+  return `Your previous attempt did not satisfy the goal.
+
+Feedback on what was wrong:
+${feedback}
+
+Address every point above and produce a new, corrected response that fully satisfies the goal. Do not restate or lightly edit the previous attempt — fix the specific problems called out.`
 }
 
 /** `undefined` when the invocation was cancelled before the model replied. */

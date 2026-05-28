@@ -6,6 +6,7 @@ import { Agent } from '../../../agent/agent.js'
 import { AfterInvocationEvent } from '../../../hooks/events.js'
 import { MockMessageModel } from '../../../__fixtures__/mock-message-model.js'
 import { JsonBlock, Message, TextBlock, ToolResultBlock, ToolUseBlock } from '../../../types/messages.js'
+import type { SystemPrompt } from '../../../types/messages.js'
 import { logger } from '../../../logging/logger.js'
 
 describe('GoalLoop', () => {
@@ -779,7 +780,7 @@ describe('GoalLoop natural-language judge', () => {
     expect(messageLengths).toEqual([1, 1, 3, 1])
   })
 
-  it('uses evaluatorModel override when provided (different model instance)', async () => {
+  it('uses judge.model override when provided (different model instance)', async () => {
     const hostModel = new MockMessageModel().addTurn({ type: 'textBlock', text: 'response' })
     const judgeModel = new MockMessageModel().addTurn(...buildJudgeTurn(true))
     const hostSpy = vi.spyOn(hostModel, 'stream')
@@ -788,7 +789,7 @@ describe('GoalLoop natural-language judge', () => {
     const plugin = new GoalLoop({
       name: 'nl-override-model',
       validate: 'be concise',
-      evaluatorModel: judgeModel,
+      judge: { model: judgeModel },
       maxAttempts: 1,
     })
     const agent = new Agent({ model: hostModel, plugins: [plugin], printer: false })
@@ -802,6 +803,36 @@ describe('GoalLoop natural-language judge', () => {
     })
     expect(hostSpy).toHaveBeenCalledTimes(1)
     expect(judgeSpy).toHaveBeenCalledTimes(1)
+  })
+
+  it('uses judge.systemPrompt override as the judge agent system prompt', async () => {
+    const model = new MockMessageModel()
+      .addTurn({ type: 'textBlock', text: 'response' })
+      .addTurn(...buildJudgeTurn(true))
+
+    // The judge agent is built internally; the only way it reaches the model is
+    // via the system prompt threaded into the stream call. Assert the override
+    // shows up there.
+    const systemPrompts: Array<SystemPrompt | undefined> = []
+    const originalStream = model.stream.bind(model)
+    vi.spyOn(model, 'stream').mockImplementation(async function* (messages, options) {
+      systemPrompts.push(options?.systemPrompt)
+      yield* originalStream(messages, options)
+    })
+
+    const plugin = new GoalLoop({
+      name: 'nl-override-system-prompt',
+      validate: 'be concise',
+      judge: { systemPrompt: 'CUSTOM_JUDGE_RUBRIC_MARKER' },
+      maxAttempts: 1,
+    })
+    const agent = new Agent({ model, plugins: [plugin], printer: false })
+
+    await agent.invoke('go')
+
+    // Stream call order: host turn (no judge system prompt), then judge turn
+    // (carrying the override).
+    expect(systemPrompts).toContain('CUSTOM_JUDGE_RUBRIC_MARKER')
   })
 })
 

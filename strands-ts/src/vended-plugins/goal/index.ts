@@ -19,6 +19,7 @@
 export { GoalLoop } from './plugin.js'
 export type {
   GoalLoopOptions,
+  JudgeConfig,
   Validator,
   ValidationOutcome,
   GoalAttempt,
