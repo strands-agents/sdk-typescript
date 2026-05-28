@@ -28,7 +28,7 @@ const programmaticToolCallerInputSchema = z.object({
  * Long-form tool description shown to the model. Mirrors the level of detail of
  * the Python `programmatic_tool_caller` docstring so the model understands how
  * to drive the tool, how output is captured, and what the calling conventions
- * are. Kept as a module constant so it can be unit-tested and reused.
+ * are. Kept as a module constant for readability and single-sourcing.
  */
 const PROGRAMMATIC_TOOL_CALLER_DESCRIPTION = [
   "Execute JavaScript code that calls the agent's other tools as async functions, instead of",
