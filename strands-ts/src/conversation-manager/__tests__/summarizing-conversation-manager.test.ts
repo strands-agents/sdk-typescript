@@ -406,4 +406,108 @@ describe('SummarizingConversationManager', () => {
       expect(mockAgent.messages).toHaveLength(20)
     })
   })
+
+  describe('protectedMessageRange', () => {
+    it('protects first N messages from summarization (positive)', async () => {
+      const model = new MockMessageModel()
+      model.addTurn({ type: 'textBlock', text: 'Summary' })
+
+      const manager = new SummarizingConversationManager({
+        summaryRatio: 0.5,
+        preserveRecentMessages: 2,
+        protectedMessageRange: 2,
+      })
+
+      const agent = createMockAgent({
+        messages: [
+          textMsg('user', 'protected-1'),
+          textMsg('assistant', 'protected-2'),
+          textMsg('user', 'summarize-me'),
+          textMsg('assistant', 'summarize-me-too'),
+          textMsg('user', 'recent-1'),
+          textMsg('assistant', 'recent-2'),
+        ],
+      })
+
+      await manager.reduce({ agent, model })
+
+      const texts = agent.messages.map((m) => (m.content[0] as TextBlock).text)
+      expect(texts).toContain('protected-1')
+      expect(texts).toContain('protected-2')
+      expect(texts).toContain('Summary')
+      expect(texts).not.toContain('summarize-me')
+    })
+
+    it('protects last N messages from summarization (negative)', async () => {
+      const model = new MockMessageModel()
+      model.addTurn({ type: 'textBlock', text: 'Summary' })
+
+      const manager = new SummarizingConversationManager({
+        summaryRatio: 0.8,
+        preserveRecentMessages: 0,
+        protectedMessageRange: -2,
+      })
+
+      const agent = createMockAgent({
+        messages: [
+          textMsg('user', 'old-1'),
+          textMsg('assistant', 'old-2'),
+          textMsg('user', 'old-3'),
+          textMsg('assistant', 'old-4'),
+          textMsg('user', 'protected-last-1'),
+          textMsg('assistant', 'protected-last-2'),
+        ],
+      })
+
+      await manager.reduce({ agent, model })
+
+      const texts = agent.messages.map((m) => (m.content[0] as TextBlock).text)
+      expect(texts).toContain('protected-last-1')
+      expect(texts).toContain('protected-last-2')
+      expect(texts).toContain('Summary')
+    })
+
+    it('returns false when all messages in summary range are protected', async () => {
+      const model = new MockMessageModel()
+      model.addTurn({ type: 'textBlock', text: 'Summary' })
+
+      const manager = new SummarizingConversationManager({
+        summaryRatio: 0.3,
+        preserveRecentMessages: 2,
+        protectedMessageRange: 10,
+      })
+
+      const agent = createMockAgent({ messages: makeMessages(6) })
+      const result = await manager.reduce({ agent, model })
+      expect(result).toBe(false)
+    })
+
+    it('pinned message in middle survives summarization', async () => {
+      const { pinMessage } = await import('../../context-manager/compression/pin-message.js')
+      const model = new MockMessageModel()
+      model.addTurn({ type: 'textBlock', text: 'Summary' })
+
+      const manager = new SummarizingConversationManager({
+        summaryRatio: 0.5,
+        preserveRecentMessages: 2,
+      })
+
+      const agent = createMockAgent({
+        messages: [
+          textMsg('user', 'old-1'),
+          pinMessage(textMsg('assistant', 'pinned-middle')),
+          textMsg('user', 'old-3'),
+          textMsg('assistant', 'old-4'),
+          textMsg('user', 'recent-1'),
+          textMsg('assistant', 'recent-2'),
+        ],
+      })
+
+      await manager.reduce({ agent, model })
+
+      const texts = agent.messages.map((m) => (m.content[0] as TextBlock).text)
+      expect(texts).toContain('pinned-middle')
+      expect(texts).toContain('Summary')
+    })
+  })
 })

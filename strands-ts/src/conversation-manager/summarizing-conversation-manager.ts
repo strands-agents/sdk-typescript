@@ -13,6 +13,7 @@ import {
   type ProactiveCompressionConfig,
   type ConversationManagerReduceOptions,
 } from './conversation-manager.js'
+import { isPinned } from '../context-manager/compression/pin-message.js'
 import { logger } from '../logging/logger.js'
 import { normalizeError } from '../errors.js'
 import type { Model } from '../models/model.js'
@@ -83,6 +84,15 @@ export type SummarizingConversationManagerConfig = {
    * - `false` or omitted: disabled, only reactive overflow recovery is used.
    */
   proactiveCompression?: boolean | ProactiveCompressionConfig
+
+  /**
+   * Protect messages from eviction during summarization.
+   * Positive values protect the first N messages; negative values protect the last N.
+   *
+   * Protected messages are compacted to the front of the array before the summary message.
+   * For agent-controlled pinning, add `pinMessageTool` to the agent's tools array.
+   */
+  protectedMessageRange?: number
 }
 
 /**
@@ -99,6 +109,7 @@ export class SummarizingConversationManager extends ConversationManager {
   private readonly _summaryRatio: number
   private readonly _preserveRecentMessages: number
   private readonly _summarizationSystemPrompt: string
+  private readonly _protectedMessageRange: number | undefined
 
   constructor(config?: SummarizingConversationManagerConfig) {
     super(config)
@@ -107,6 +118,7 @@ export class SummarizingConversationManager extends ConversationManager {
     this._summaryRatio = Math.max(0.1, Math.min(0.8, config?.summaryRatio ?? 0.3))
     this._preserveRecentMessages = config?.preserveRecentMessages ?? 10
     this._summarizationSystemPrompt = config?.summarizationSystemPrompt ?? DEFAULT_SUMMARIZATION_PROMPT
+    this._protectedMessageRange = config?.protectedMessageRange
   }
 
   /**
@@ -164,13 +176,27 @@ export class SummarizingConversationManager extends ConversationManager {
     // Adjust split point to avoid breaking tool use/result pairs
     messagesToSummarizeCount = this._adjustSplitPointForToolPairs(messages, messagesToSummarizeCount)
 
-    const messagesToSummarize = messages.slice(0, messagesToSummarizeCount)
+    // Partition [0, messagesToSummarizeCount) into protected (preserve) and non-protected (summarize)
+    const protectedToPreserve: Message[] = []
+    const toSummarize: Message[] = []
+    for (let i = 0; i < messagesToSummarizeCount; i++) {
+      if (this._isProtected(messages, i)) {
+        protectedToPreserve.push(messages[i]!)
+      } else {
+        toSummarize.push(messages[i]!)
+      }
+    }
+
+    if (toSummarize.length === 0) {
+      logger.warn(`messages=<${messages.length}> | all messages in summarize range are protected, unable to reduce`)
+      return false
+    }
 
     // Generate summary via model call
-    const summaryMessage = await this._generateSummary(messagesToSummarize, model)
+    const summaryMessage = await this._generateSummary(toSummarize, model)
 
-    // Replace summarized messages with the summary
-    messages.splice(0, messagesToSummarizeCount, summaryMessage)
+    // Replace summarized range with protected messages + summary
+    messages.splice(0, messagesToSummarizeCount, ...protectedToPreserve, summaryMessage)
 
     return true
   }
@@ -259,5 +285,12 @@ export class SummarizingConversationManager extends ConversationManager {
     }
 
     return splitPoint
+  }
+
+  private _isProtected(messages: Message[], index: number): boolean {
+    if (isPinned(messages, index)) return true
+    if (this._protectedMessageRange === undefined || this._protectedMessageRange === 0) return false
+    if (this._protectedMessageRange > 0) return index < this._protectedMessageRange
+    return index >= messages.length + this._protectedMessageRange
   }
 }

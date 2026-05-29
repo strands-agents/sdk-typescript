@@ -14,6 +14,7 @@ import {
   type ProactiveCompressionConfig,
   type ConversationManagerReduceOptions,
 } from './conversation-manager.js'
+import { isPinned } from '../context-manager/compression/pin-message.js'
 import { logger } from '../logging/logger.js'
 
 const PRESERVE_CHARS = 200
@@ -103,6 +104,14 @@ export type SlidingWindowConversationManagerConfig = {
    * - `false` or omitted: disabled, only reactive overflow recovery is used.
    */
   proactiveCompression?: boolean | ProactiveCompressionConfig
+
+  /**
+   * Protect messages from eviction during reduction.
+   * Positive values protect the first N messages; negative values protect the last N.
+   *
+   * For agent-controlled pinning, add `pinMessageTool` to the agent's tools array.
+   */
+  protectedMessageRange?: number
 }
 
 /**
@@ -121,6 +130,7 @@ export type SlidingWindowConversationManagerConfig = {
 export class SlidingWindowConversationManager extends ConversationManager {
   private readonly _windowSize: number
   private readonly _shouldTruncateResults: boolean
+  private readonly _protectedMessageRange: number | undefined
 
   /**
    * Unique identifier for this conversation manager.
@@ -136,6 +146,7 @@ export class SlidingWindowConversationManager extends ConversationManager {
     super(config)
     this._windowSize = config?.windowSize ?? 40
     this._shouldTruncateResults = config?.shouldTruncateResults ?? true
+    this._protectedMessageRange = config?.protectedMessageRange
   }
 
   /**
@@ -264,8 +275,24 @@ export class SlidingWindowConversationManager extends ConversationManager {
       return false
     }
 
-    // trimIndex is guaranteed to be < messages.length here, so splice always removes at least one message
-    messages.splice(0, trimIndex)
+    // Collect non-protected indices in [0, trimIndex) to remove
+    const indicesToRemove: number[] = []
+    for (let i = 0; i < trimIndex; i++) {
+      if (this._isProtected(messages, i)) continue
+      indicesToRemove.push(i)
+    }
+
+    if (indicesToRemove.length === 0) {
+      logger.warn(
+        `window_size=<${this._windowSize}>, messages=<${messages.length}> | all messages in trim range are protected, unable to reduce`
+      )
+      return false
+    }
+
+    // Remove in reverse order to keep indices stable
+    for (let i = indicesToRemove.length - 1; i >= 0; i--) {
+      messages.splice(indicesToRemove[i]!, 1)
+    }
     return true
   }
 
@@ -449,15 +476,21 @@ export class SlidingWindowConversationManager extends ConversationManager {
    */
   private _findOldestMessageWithToolResults(messages: Message[]): number | undefined {
     for (let idx = 0; idx < messages.length; idx++) {
-      const currentMessage = messages[idx]!
+      if (this._isProtected(messages, idx)) continue
 
-      const hasToolResult = currentMessage.content.some((block) => block.type === 'toolResultBlock')
-
+      const hasToolResult = messages[idx]!.content.some((block) => block.type === 'toolResultBlock')
       if (hasToolResult) {
         return idx
       }
     }
 
     return undefined
+  }
+
+  private _isProtected(messages: Message[], index: number): boolean {
+    if (isPinned(messages, index)) return true
+    if (this._protectedMessageRange === undefined || this._protectedMessageRange === 0) return false
+    if (this._protectedMessageRange > 0) return index < this._protectedMessageRange
+    return index >= messages.length + this._protectedMessageRange
   }
 }
