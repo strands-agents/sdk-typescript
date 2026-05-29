@@ -15,7 +15,13 @@ import type { MiddlewareHandler, HandlerOf } from '../types.js'
 import type { AgentStreamEvent, LocalAgent } from '../../types/agent.js'
 import type { Plugin } from '../../plugins/plugin.js'
 import { TextBlock, ToolResultBlock, Message } from '../../types/messages.js'
-import { AfterToolCallEvent, BeforeModelCallEvent, AfterModelCallEvent, BeforeToolCallEvent, ContentBlockEvent } from '../../hooks/events.js'
+import {
+  AfterToolCallEvent,
+  BeforeModelCallEvent,
+  AfterModelCallEvent,
+  BeforeToolCallEvent,
+  ContentBlockEvent,
+} from '../../hooks/events.js'
 import type { ToolContext } from '../../tools/tool.js'
 
 type ExecuteToolMiddleware = MiddlewareHandler<ExecuteToolContext, AgentStreamEvent, ExecuteToolResult>
@@ -48,7 +54,7 @@ describe('Agent middleware integration — InvokeModelStage', () => {
             toolUseId: 'tool-1',
             status: 'success' as const,
             content: [new TextBlock('ok')],
-          }),
+          })
       )
       const agent = new Agent({ model, tools: [tool], printer: false, systemPrompt: 'Be helpful' })
 
@@ -61,8 +67,8 @@ describe('Agent middleware integration — InvokeModelStage', () => {
 
       await agent.invoke('Test prompt')
 
+      expect(receivedContext?.agent).toBe(agent)
       expect(receivedContext).toMatchObject({
-        agent,
         systemPrompt: 'Be helpful',
         messages: expect.arrayContaining([expect.any(Message)]),
         toolSpecs: expect.arrayContaining([expect.objectContaining({ name: 'testTool' })]),
@@ -102,7 +108,7 @@ describe('Agent middleware integration — InvokeModelStage', () => {
               stopReason: 'endTurn' as const,
             },
           }
-        },
+        }
       )
 
       const result = await agent.invoke('Test prompt')
@@ -127,7 +133,7 @@ describe('Agent middleware integration — InvokeModelStage', () => {
               stopReason: 'endTurn' as const,
             },
           }
-        },
+        }
       )
 
       await agent.invoke('Test prompt')
@@ -141,19 +147,13 @@ describe('Agent middleware integration — InvokeModelStage', () => {
       const model = new MockMessageModel().addTurn({ type: 'textBlock', text: 'Hello' })
       const agent = new Agent({ model, printer: false })
 
-      agent.addMiddleware(
-        InvokeModelStage,
-        async function* (context, next) {
-          const modifiedContext: InvokeModelContext = {
-            ...context,
-            messages: [
-              ...context.messages,
-              new Message({ role: 'user', content: [new TextBlock('Injected message')] }),
-            ],
-          }
-          return yield* next(modifiedContext)
-        },
-      )
+      agent.addMiddleware(InvokeModelStage, async function* (context, next) {
+        const modifiedContext: InvokeModelContext = {
+          ...context,
+          messages: [...context.messages, new Message({ role: 'user', content: [new TextBlock('Injected message')] })],
+        }
+        return yield* next(modifiedContext)
+      })
 
       const streamSpy = vi.spyOn(model, 'stream')
 
@@ -168,16 +168,13 @@ describe('Agent middleware integration — InvokeModelStage', () => {
       const model = new MockMessageModel().addTurn({ type: 'textBlock', text: 'Hello' })
       const agent = new Agent({ model, printer: false })
 
-      agent.addMiddleware(
-        InvokeModelStage,
-        async function* (context, next) {
-          const modifiedContext: InvokeModelContext = {
-            ...context,
-            toolSpecs: [],
-          }
-          return yield* next(modifiedContext)
-        },
-      )
+      agent.addMiddleware(InvokeModelStage, async function* (context, next) {
+        const modifiedContext: InvokeModelContext = {
+          ...context,
+          toolSpecs: [],
+        }
+        return yield* next(modifiedContext)
+      })
 
       const streamSpy = vi.spyOn(model, 'stream')
 
@@ -200,13 +197,10 @@ describe('Agent middleware integration — InvokeModelStage', () => {
         order.push('beforeModelCall')
       })
 
-      agent.addMiddleware(
-        InvokeModelStage,
-        async function* (context, next) {
-          order.push('middleware')
-          return yield* next(context)
-        },
-      )
+      agent.addMiddleware(InvokeModelStage, async function* (context, next) {
+        order.push('middleware')
+        return yield* next(context)
+      })
 
       await agent.invoke('Test prompt')
 
@@ -223,15 +217,12 @@ describe('Agent middleware integration — InvokeModelStage', () => {
         order.push('afterModelCall')
       })
 
-      agent.addMiddleware(
-        InvokeModelStage,
-        async function* (context, next) {
-          order.push('middleware-start')
-          const result = yield* next(context)
-          order.push('middleware-end')
-          return result
-        },
-      )
+      agent.addMiddleware(InvokeModelStage, async function* (context, next) {
+        order.push('middleware-start')
+        const result = yield* next(context)
+        order.push('middleware-end')
+        return result
+      })
 
       await agent.invoke('Test prompt')
 
@@ -258,7 +249,7 @@ describe('Agent middleware integration — InvokeModelStage', () => {
               stopReason: 'endTurn' as const,
             },
           }
-        },
+        }
       )
 
       await agent.invoke('Test prompt')
@@ -291,7 +282,7 @@ describe('Agent middleware integration — InvokeModelStage', () => {
             toolUseId: 'tool-1',
             status: 'success' as const,
             content: [new TextBlock('Tool executed')],
-          }),
+          })
       )
 
       const agent = new Agent({ model, tools: [tool], printer: false })
@@ -425,12 +416,7 @@ describe('AgentStreamStage integration', () => {
 
       await collectGenerator(agent.stream('Test prompt'))
 
-      expect(callOrder).toStrictEqual([
-        'outer-before',
-        'inner-before',
-        'inner-after',
-        'outer-after',
-      ])
+      expect(callOrder).toStrictEqual(['outer-before', 'inner-before', 'inner-after', 'outer-after'])
     })
   })
 
@@ -663,7 +649,7 @@ describe('ExecuteToolStage integration', () => {
             toolUseId: 'tool-1',
             status: 'success',
             content: [new TextBlock('executed')],
-          }),
+          })
       )
 
       const agent = new Agent({ model, tools: [tool], printer: false })
@@ -696,7 +682,7 @@ describe('ExecuteToolStage integration', () => {
             toolUseId: 'tool-1',
             status: 'success',
             content: [new TextBlock('ok')],
-          }),
+          })
       )
 
       const agent = new Agent({ model, tools: [tool], printer: false })
@@ -736,7 +722,7 @@ describe('ExecuteToolStage integration', () => {
             toolUseId: 'tool-1',
             status: 'success',
             content: [new TextBlock('ok')],
-          }),
+          })
       )
 
       const agent = new Agent({ model, tools: [tool], printer: false })
@@ -762,12 +748,7 @@ describe('ExecuteToolStage integration', () => {
 
       await agent.invoke('Use the tool')
 
-      expect(callOrder).toStrictEqual([
-        'outer-before',
-        'inner-before',
-        'inner-after',
-        'outer-after',
-      ])
+      expect(callOrder).toStrictEqual(['outer-before', 'inner-before', 'inner-after', 'outer-after'])
     })
   })
 
@@ -783,7 +764,7 @@ describe('ExecuteToolStage integration', () => {
             toolUseId: 'tool-1',
             status: 'success',
             content: [new TextBlock('real result')],
-          }),
+          })
       )
 
       const tool = createMockTool('testTool', toolFn)
@@ -823,7 +804,7 @@ describe('ExecuteToolStage integration', () => {
             toolUseId: 'tool-1',
             status: 'success',
             content: [new TextBlock('real')],
-          }),
+          })
       )
 
       const agent = new Agent({ model, tools: [tool], printer: false })
@@ -845,7 +826,7 @@ describe('ExecuteToolStage integration', () => {
 
       // The tool result message in conversation should contain the mocked result
       const toolResultMessage = agent.messages.find(
-        (m: Message) => m.role === 'user' && m.content.some((c) => c.type === 'toolResultBlock'),
+        (m: Message) => m.role === 'user' && m.content.some((c) => c.type === 'toolResultBlock')
       )
       expect(toolResultMessage).toBeDefined()
       const toolResultBlock = toolResultMessage!.content.find((c: { type: string }) => c.type === 'toolResultBlock')
@@ -854,7 +835,7 @@ describe('ExecuteToolStage integration', () => {
           toolUseId: 'tool-1',
           status: 'success',
           content: [new TextBlock('mocked data')],
-        }),
+        })
       )
     })
   })
@@ -908,7 +889,7 @@ describe('ExecuteToolStage integration', () => {
             toolUseId: 'tool-1',
             status: 'success',
             content: [new TextBlock('ok')],
-          }),
+          })
       )
 
       const agent = new Agent({ model, tools: [tool], printer: false })
@@ -949,7 +930,7 @@ describe('ExecuteToolStage integration', () => {
             toolUseId: 'tool-1',
             status: 'success',
             content: [new TextBlock('executed')],
-          }),
+          })
       )
 
       const agent = new Agent({ model, tools: [tool], printer: false })
@@ -996,7 +977,7 @@ describe('ExecuteToolStage integration', () => {
             toolUseId: 'tool-1',
             status: 'success',
             content: [new TextBlock('real')],
-          }),
+          })
       )
 
       const agent = new Agent({ model, tools: [tool], printer: false })
@@ -1038,7 +1019,7 @@ describe('ExecuteToolStage integration', () => {
             toolUseId: 'tool-1',
             status: 'success',
             content: [new TextBlock('real')],
-          }),
+          })
       )
 
       const agent = new Agent({ model, tools: [tool], printer: false })
@@ -1080,7 +1061,6 @@ describe('Middleware use cases', () => {
       initAgent(agent: LocalAgent): void {
         const cache = this._cache
 
-         
         agent.addMiddleware(ExecuteToolStage, async function* (context, next) {
           const key = `${context.toolUse.name}:${JSON.stringify(context.toolUse.input)}`
           const cached = cache.get(key)
@@ -1223,12 +1203,14 @@ describe('Middleware use cases', () => {
         ])
         .addTurn({ type: 'textBlock', text: 'The answer is 42' })
 
-      const tool = createMockTool('lookup', (ctx: ToolContext) =>
-        new ToolResultBlock({
-          toolUseId: ctx.toolUse.toolUseId,
-          status: 'success',
-          content: [new TextBlock('42')],
-        }),
+      const tool = createMockTool(
+        'lookup',
+        (ctx: ToolContext) =>
+          new ToolResultBlock({
+            toolUseId: ctx.toolUse.toolUseId,
+            status: 'success',
+            content: [new TextBlock('42')],
+          })
       )
 
       const agent = new Agent({ model, tools: [tool], plugins: [new StreamFinalTurnOnly()], printer: false })

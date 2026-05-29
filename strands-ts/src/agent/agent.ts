@@ -464,7 +464,7 @@ export class Agent implements LocalAgent, InvokableAgent {
    */
   addMiddleware<TContext, TEvent, TResult>(
     stage: Stage<TContext, TEvent, TResult>,
-    handler: MiddlewareHandler<TContext, TEvent, TResult>,
+    handler: MiddlewareHandler<TContext, TEvent, TResult>
   ): void {
     this._middlewareRegistry.add(stage, handler)
   }
@@ -779,7 +779,7 @@ export class Agent implements LocalAgent, InvokableAgent {
           async function* (ctx: AgentStreamContext): AsyncGenerator<AgentStreamEvent, AgentStreamResult, undefined> {
             const result = yield* self._streamWithResumeLoop(ctx.args, ctx.options)
             return { result }
-          },
+          }
         )
         return result
       } catch (error) {
@@ -813,7 +813,7 @@ export class Agent implements LocalAgent, InvokableAgent {
    */
   private async *_streamWithResumeLoop(
     args: InvokeArgs,
-    options?: InvokeOptions,
+    options?: InvokeOptions
   ): AsyncGenerator<AgentStreamEvent, AgentResult, undefined> {
     let currentArgs: InvokeArgs = args
 
@@ -1680,7 +1680,7 @@ export class Agent implements LocalAgent, InvokableAgent {
           iterResult = await gen.next()
         }
         return { result: iterResult.value }
-      },
+      }
     )
     return middlewareResult.result
   }
@@ -2134,11 +2134,7 @@ export class Agent implements LocalAgent, InvokableAgent {
       }
 
       // Execute tool core logic through middleware chain
-      const middlewareResult = yield* this._executeToolWithMiddleware(
-        effectiveTool,
-        toolUse,
-        invocationState,
-      )
+      const middlewareResult = yield* this._executeToolWithMiddleware(effectiveTool, toolUse, invocationState)
       const toolResult = middlewareResult.result
       const error = toolResult.error
 
@@ -2166,7 +2162,7 @@ export class Agent implements LocalAgent, InvokableAgent {
   private async *_executeToolWithMiddleware(
     tool: Tool | undefined,
     toolUse: ToolUseData,
-    invocationState: InvocationState,
+    invocationState: InvocationState
   ): AsyncGenerator<AgentStreamEvent, ExecuteToolResult, undefined> {
     const context: ExecuteToolContext = {
       agent: this,
@@ -2204,14 +2200,14 @@ export class Agent implements LocalAgent, InvokableAgent {
       context,
       async function* (ctx: ExecuteToolContext): AsyncGenerator<AgentStreamEvent, ExecuteToolResult, undefined> {
         return yield* self._executeToolCore(ctx.tool, ctx.toolUse, ctx.invocationState)
-      },
+      }
     )
   }
 
   private async *_executeToolCore(
     effectiveTool: Tool | undefined,
     toolUse: ToolUseData,
-    invocationState: InvocationState,
+    invocationState: InvocationState
   ): AsyncGenerator<AgentStreamEvent, ExecuteToolResult, undefined> {
     // Start tool span within loop span context
     const toolSpan = this._tracer.startToolCallSpan({

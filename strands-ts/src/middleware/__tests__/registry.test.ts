@@ -23,7 +23,7 @@ const TestStage = createStage<TestContext, TestEvent, TestResult>('test')
  * Helper to collect all yielded events and the return value from an async generator.
  */
 async function collect<TEvent, TResult>(
-  gen: AsyncGenerator<TEvent, TResult, undefined>,
+  gen: AsyncGenerator<TEvent, TResult, undefined>
 ): Promise<{ events: TEvent[]; result: TResult }> {
   const events: TEvent[] = []
   let iterResult = await gen.next()
@@ -114,13 +114,7 @@ describe('MiddlewareRegistry', () => {
       const chain = registry.compose(TestStage, terminal)
       await collect(chain({ value: 'test' }))
 
-      expect(callOrder).toStrictEqual([
-        'outer-before',
-        'inner-before',
-        'terminal',
-        'inner-after',
-        'outer-after',
-      ])
+      expect(callOrder).toStrictEqual(['outer-before', 'inner-before', 'terminal', 'inner-after', 'outer-after'])
     })
   })
 
@@ -179,11 +173,7 @@ describe('MiddlewareRegistry', () => {
       const chain = registry.compose(TestStage, terminal)
       const { events, result } = await collect(chain({ value: 'test' }))
 
-      expect(events).toStrictEqual([
-        { data: 'event-1' },
-        { data: 'event-2' },
-        { data: 'event-3' },
-      ])
+      expect(events).toStrictEqual([{ data: 'event-1' }, { data: 'event-2' }, { data: 'event-3' }])
       expect(result).toStrictEqual({ output: 'terminal-result' })
     })
   })
@@ -219,10 +209,7 @@ describe('MiddlewareRegistry', () => {
       const chain = registry.compose(TestStage, terminal)
       const { events, result } = await collect(chain({ value: 'test' }))
 
-      expect(events).toStrictEqual([
-        { data: 'keep-1' },
-        { data: 'keep-2' },
-      ])
+      expect(events).toStrictEqual([{ data: 'keep-1' }, { data: 'keep-2' }])
       expect(result).toStrictEqual({ output: 'done' })
     })
   })

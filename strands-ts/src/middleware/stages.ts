@@ -1,5 +1,12 @@
 import type { Stage } from './types.js'
-import type { LocalAgent, AgentStreamEvent, InvocationState, InvokeArgs, InvokeOptions, AgentResult } from '../types/agent.js'
+import type {
+  LocalAgent,
+  AgentStreamEvent,
+  InvocationState,
+  InvokeArgs,
+  InvokeOptions,
+  AgentResult,
+} from '../types/agent.js'
 import type { Message, SystemPrompt, ToolResultBlock } from '../types/messages.js'
 import type { ToolSpec, ToolChoice } from '../tools/types.js'
 import type { StateStore } from '../state-store.js'

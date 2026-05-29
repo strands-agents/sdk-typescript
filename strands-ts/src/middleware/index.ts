@@ -1,10 +1,5 @@
 export type { Stage, MiddlewareNext, MiddlewareHandler, HandlerOf, NextOf } from './types.js'
-export {
-  createStage,
-  InvokeModelStage,
-  ExecuteToolStage,
-  AgentStreamStage,
-} from './stages.js'
+export { createStage, InvokeModelStage, ExecuteToolStage, AgentStreamStage } from './stages.js'
 export type {
   InvokeModelContext,
   InvokeModelResult,

@@ -353,7 +353,7 @@ export interface LocalAgent {
    */
   addMiddleware<TContext, TEvent, TResult>(
     stage: Stage<TContext, TEvent, TResult>,
-    handler: MiddlewareHandler<TContext, TEvent, TResult>,
+    handler: MiddlewareHandler<TContext, TEvent, TResult>
   ): void
 }
 

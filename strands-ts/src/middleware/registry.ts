@@ -21,7 +21,7 @@ export class MiddlewareRegistry {
    */
   add<TContext, TEvent, TResult>(
     stage: Stage<TContext, TEvent, TResult>,
-    handler: MiddlewareHandler<TContext, TEvent, TResult>,
+    handler: MiddlewareHandler<TContext, TEvent, TResult>
   ): void {
     const handlers = this._handlers.get(stage) ?? []
     handlers.push(handler)
@@ -39,7 +39,7 @@ export class MiddlewareRegistry {
    */
   compose<TContext, TEvent, TResult>(
     stage: Stage<TContext, TEvent, TResult>,
-    terminal: MiddlewareNext<TContext, TEvent, TResult>,
+    terminal: MiddlewareNext<TContext, TEvent, TResult>
   ): MiddlewareNext<TContext, TEvent, TResult> {
     const handlers = (this._handlers.get(stage) ?? []) as MiddlewareHandler<TContext, TEvent, TResult>[]
 
@@ -65,7 +65,7 @@ export class MiddlewareRegistry {
   invoke<TContext, TEvent, TResult>(
     stage: Stage<TContext, TEvent, TResult>,
     context: TContext,
-    terminal: MiddlewareNext<TContext, TEvent, TResult>,
+    terminal: MiddlewareNext<TContext, TEvent, TResult>
   ): AsyncGenerator<TEvent, TResult, undefined> {
     const chain = this.compose(stage, terminal)
     return chain(context)

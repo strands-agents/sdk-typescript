@@ -20,7 +20,7 @@ interface CustomResult {
  * Helper to collect all yielded events and the return value from an async generator.
  */
 async function collect<TEvent, TResult>(
-  gen: AsyncGenerator<TEvent, TResult, undefined>,
+  gen: AsyncGenerator<TEvent, TResult, undefined>
 ): Promise<{ events: TEvent[]; result: TResult }> {
   const events: TEvent[] = []
   let iterResult = await gen.next()
@@ -70,10 +70,7 @@ describe('Third-party custom stages', () => {
       const { events, result } = await collect(chain({ label: 'test', count: 42 }))
 
       expect(callOrder).toStrictEqual(['middleware', 'terminal', 'middleware-after'])
-      expect(events).toStrictEqual([
-        { kind: 'pre-test' },
-        { kind: 'terminal-test' },
-      ])
+      expect(events).toStrictEqual([{ kind: 'pre-test' }, { kind: 'terminal-test' }])
       expect(result).toStrictEqual({ summary: 'done-42' })
     })
 
@@ -140,11 +137,7 @@ describe('Third-party custom stages', () => {
       const chain = registry.compose(CustomStage, terminal)
       const { events, result } = await collect(chain({ label: 'item', count: 5 }))
 
-      expect(events).toStrictEqual([
-        { kind: 'log-start' },
-        { kind: 'processed-10' },
-        { kind: 'log-end' },
-      ])
+      expect(events).toStrictEqual([{ kind: 'log-start' }, { kind: 'processed-10' }, { kind: 'log-end' }])
       expect(result).toStrictEqual({ summary: 'result-item-10' })
     })
   })
