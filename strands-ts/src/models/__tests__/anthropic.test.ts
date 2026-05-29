@@ -387,6 +387,32 @@ describe('AnthropicModel', () => {
       await expect(collectIterator(provider.stream(messages))).rejects.toThrow(ContextWindowOverflowError)
     })
 
+    it.each([
+      'input is too long',
+      'input length exceeds context window',
+      'input and output tokens exceed your context limit',
+    ])('maps overflow phrase %p to ContextWindowOverflowError', async (phrase) => {
+      const mockClient = createMockClient(async function* () {
+        yield { type: 'ping' }
+        throw new Error(phrase)
+      })
+      const provider = new AnthropicModel({ client: mockClient })
+      const messages = [new Message({ role: 'user', content: [new TextBlock('Hi')] })]
+
+      await expect(collectIterator(provider.stream(messages))).rejects.toThrow(ContextWindowOverflowError)
+    })
+
+    it('matches overflow phrases case-insensitively', async () => {
+      const mockClient = createMockClient(async function* () {
+        yield { type: 'ping' }
+        throw new Error('PROMPT IS TOO LONG: 200000 tokens')
+      })
+      const provider = new AnthropicModel({ client: mockClient })
+      const messages = [new Message({ role: 'user', content: [new TextBlock('Hi')] })]
+
+      await expect(collectIterator(provider.stream(messages))).rejects.toThrow(ContextWindowOverflowError)
+    })
+
     it('maps HTTP 429 error to ModelThrottledError', async () => {
       const rateLimitError = Object.assign(new Error('Rate limit exceeded'), { status: 429 })
       // eslint-disable-next-line require-yield

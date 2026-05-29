@@ -8,8 +8,8 @@ name = "strands-agents"
 version = "2.0.0a1"
 description = "A model-driven approach to building AI agents in just a few lines of code"
 requires-python = ">=3.10"
-license = {text = "Apache-2.0"}
-license-files = ["LICENSE.APACHE", "LICENSE.MIT"]
+license = "Apache-2.0"
+license-files = ["LICENSE.APACHE"]
 authors = [
     {name = "AWS", email = "opensource@amazon.com"},
 ]
