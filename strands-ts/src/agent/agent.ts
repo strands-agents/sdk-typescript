@@ -1035,11 +1035,10 @@ export class Agent implements LocalAgent, InvokableAgent {
     // agent loop cycles within this invocation.
     const invocationState: InvocationState = options?.invocationState ?? {}
 
-    // Handle interrupt responses if present in input
+    // Interrupt responses are already consumed in stream() before middleware
+    // runs (so middleware-level interrupt() can find them). Re-extract here
+    // to gate the "non-interrupt input while interrupted" check below.
     const interruptResponses = this._extractInterruptResponses(args)
-    if (interruptResponses.length > 0) {
-      this._interruptState.resume(interruptResponses)
-    }
 
     // Reject non-interrupt input while in interrupted state
     if (this._interruptState.activated && interruptResponses.length === 0) {

@@ -327,7 +327,6 @@ export interface LocalAgent {
   ): HookCleanup
 
   /**
-  /**
    * Captures a point-in-time snapshot of the agent's current state.
    *
    * @param options - Controls which fields to capture and optional app data to store
