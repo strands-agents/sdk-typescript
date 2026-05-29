@@ -6,7 +6,6 @@ import { createMockTool } from '../../__fixtures__/tool-helpers.js'
 import { ExecuteToolStage, AgentStreamStage } from '../stages.js'
 import { TextBlock, ToolResultBlock } from '../../types/messages.js'
 import { InterruptResponseContent } from '../../types/interrupt.js'
-import type { ToolContext } from '../../tools/tool.js'
 
 describe('Middleware interrupts', () => {
   describe('ExecuteToolStage', () => {
@@ -18,7 +17,7 @@ describe('Middleware interrupts', () => {
       const tool = createMockTool('dangerousTool', () => 'executed')
       const agent = new Agent({ model, tools: [tool], printer: false })
 
-      // eslint-disable-next-line require-yield
+       
       agent.addMiddleware(ExecuteToolStage, async function* (context, next) {
         context.interrupt({ name: 'approve_tool', reason: 'Confirm execution?' })
         return yield* next(context)
@@ -45,7 +44,7 @@ describe('Middleware interrupts', () => {
 
       const agent = new Agent({ model, tools: [tool], printer: false })
 
-      // eslint-disable-next-line require-yield
+       
       agent.addMiddleware(ExecuteToolStage, async function* (context, next) {
         const approval = context.interrupt<string>({ name: 'approve_tool', reason: 'Confirm?' })
         if (approval !== 'yes') {
@@ -85,7 +84,7 @@ describe('Middleware interrupts', () => {
       const tool = createMockTool('myTool', () => 'ok')
       const agent = new Agent({ model, tools: [tool], printer: false })
 
-      // eslint-disable-next-line require-yield
+       
       agent.addMiddleware(ExecuteToolStage, async function* (context, next) {
         context.interrupt({ name: 'check' })
         return yield* next(context)
@@ -110,7 +109,7 @@ describe('Middleware interrupts', () => {
 
       const agent = new Agent({ model, tools: [tool], printer: false })
 
-      // eslint-disable-next-line require-yield
+       
       agent.addMiddleware(ExecuteToolStage, async function* (context, next) {
         // Preemptive response: returns immediately without halting
         const approval = context.interrupt<string>({ name: 'check', response: 'pre-approved' })
@@ -132,7 +131,7 @@ describe('Middleware interrupts', () => {
       const tool = createMockTool('myTool', () => 'ok')
       const agent = new Agent({ model, tools: [tool], printer: false })
 
-      // eslint-disable-next-line require-yield
+       
       agent.addMiddleware(ExecuteToolStage, async function* (context, next) {
         // Spread context to modify toolUse, interrupt should still work
         const modified = { ...context, toolUse: { ...context.toolUse, input: { x: 2 } } }
@@ -174,7 +173,7 @@ describe('Middleware interrupts', () => {
       agent.addMiddleware(AgentStreamStage, async function* (context, next) {
         const approval = context.interrupt<string>({ name: 'gate', reason: 'Proceed?' })
         if (approval !== 'go') {
-          // eslint-disable-next-line require-yield
+           
           return { result: { stopReason: 'endTurn' } } as never
         }
         return yield* next(context)

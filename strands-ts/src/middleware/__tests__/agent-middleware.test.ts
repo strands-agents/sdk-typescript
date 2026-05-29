@@ -1080,7 +1080,7 @@ describe('Middleware use cases', () => {
       initAgent(agent: LocalAgent): void {
         const cache = this._cache
 
-        // eslint-disable-next-line require-yield
+         
         agent.addMiddleware(ExecuteToolStage, async function* (context, next) {
           const key = `${context.toolUse.name}:${JSON.stringify(context.toolUse.input)}`
           const cached = cache.get(key)

@@ -46,7 +46,7 @@ import { NullConversationManager } from '../conversation-manager/null-conversati
 import { ConversationManager } from '../conversation-manager/conversation-manager.js'
 import { HookRegistryImplementation } from '../hooks/registry.js'
 import { MiddlewareRegistry, InvokeModelStage, ExecuteToolStage, AgentStreamStage } from '../middleware/index.js'
-import type { Stage, MiddlewareHandler, MiddlewareNext } from '../middleware/index.js'
+import type { Stage, MiddlewareHandler } from '../middleware/index.js'
 import type {
   InvokeModelContext,
   InvokeModelResult,
