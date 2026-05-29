@@ -5,7 +5,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Optional, Union
+from typing import Any, ClassVar, Optional, TYPE_CHECKING, Union
 
 from wasmtime.component import Variant as _WitVariant
 from wasmtime.component import VariantCase as _WitVariantCase
@@ -36,62 +36,84 @@ class CustomStorage:
 
 class StorageConfig:
     """Where to persist session snapshots."""
+    if TYPE_CHECKING:
+        File: ClassVar[type["_StorageConfig_File"]]
+        S3: ClassVar[type["_StorageConfig_S3"]]
+        Custom: ClassVar[type["_StorageConfig_Custom"]]
+        _CASES: ClassVar[dict[str, type]]
+        @staticmethod
+        def lift(raw: _WitVariant) -> "StorageConfig": ...
 
-    class File(_WitVariantCase):
-        """Local filesystem."""
-        tag = 'file'
+class _StorageConfig_File(_WitVariantCase, StorageConfig):
+    """Local filesystem."""
+    tag = 'file'
+StorageConfig.File = _StorageConfig_File  # type: ignore[attr-defined]
 
-    class S3(_WitVariantCase):
-        """Amazon S3."""
-        tag = 's3'
+class _StorageConfig_S3(_WitVariantCase, StorageConfig):
+    """Amazon S3."""
+    tag = 's3'
+StorageConfig.S3 = _StorageConfig_S3  # type: ignore[attr-defined]
 
-    class Custom(_WitVariantCase):
-        """Application-implemented backend."""
-        tag = 'custom'
+class _StorageConfig_Custom(_WitVariantCase, StorageConfig):
+    """Application-implemented backend."""
+    tag = 'custom'
+StorageConfig.Custom = _StorageConfig_Custom  # type: ignore[attr-defined]
 
-    _CASES: dict[str, type] = {
-        'file': File,
-        's3': S3,
-        'custom': Custom,
-    }
+StorageConfig._CASES = {  # type: ignore[attr-defined]
+    'file': StorageConfig.File,
+    's3': StorageConfig.S3,
+    'custom': StorageConfig.Custom,
+}
 
-    @staticmethod
-    def lift(raw: _WitVariant) -> StorageConfig:
-        cls = StorageConfig._CASES.get(raw.tag)
-        if cls is None:
-            raise ValueError(f'unknown StorageConfig arm: {raw.tag!r}')
-        return cls(raw.payload)
+
+def _StorageConfig_lift(raw: _WitVariant) -> StorageConfig:
+    cls = StorageConfig._CASES.get(raw.tag)  # type: ignore[attr-defined]
+    if cls is None:
+        raise ValueError(f'unknown StorageConfig arm: {raw.tag!r}')
+    return cls(raw.payload)
+StorageConfig.lift = staticmethod(_StorageConfig_lift)  # type: ignore[attr-defined]
 
 class SaveLatestPolicy:
     """When to update the "latest" snapshot pointer. The `trigger` arm
 carries the id of an application-supplied callback that decides
 per-invocation."""
+    if TYPE_CHECKING:
+        Message: ClassVar[type["_SaveLatestPolicy_Message"]]
+        Invocation: ClassVar[type["_SaveLatestPolicy_Invocation"]]
+        Trigger: ClassVar[type["_SaveLatestPolicy_Trigger"]]
+        _CASES: ClassVar[dict[str, type]]
+        @staticmethod
+        def lift(raw: _WitVariant) -> "SaveLatestPolicy": ...
 
-    class Message(_WitVariantCase):
-        """After every message added to the conversation."""
-        tag = 'message'
+class _SaveLatestPolicy_Message(_WitVariantCase, SaveLatestPolicy):
+    """After every message added to the conversation."""
+    tag = 'message'
+SaveLatestPolicy.Message = _SaveLatestPolicy_Message  # type: ignore[attr-defined]
 
-    class Invocation(_WitVariantCase):
-        """Once per invocation, after it completes."""
-        tag = 'invocation'
+class _SaveLatestPolicy_Invocation(_WitVariantCase, SaveLatestPolicy):
+    """Once per invocation, after it completes."""
+    tag = 'invocation'
+SaveLatestPolicy.Invocation = _SaveLatestPolicy_Invocation  # type: ignore[attr-defined]
 
-    class Trigger(_WitVariantCase):
-        """Each invocation consults the named `snapshot-trigger-handler`.
+class _SaveLatestPolicy_Trigger(_WitVariantCase, SaveLatestPolicy):
+    """Each invocation consults the named `snapshot-trigger-handler`.
 The id identifies which handler to invoke."""
-        tag = 'trigger'
+    tag = 'trigger'
+SaveLatestPolicy.Trigger = _SaveLatestPolicy_Trigger  # type: ignore[attr-defined]
 
-    _CASES: dict[str, type] = {
-        'message': Message,
-        'invocation': Invocation,
-        'trigger': Trigger,
-    }
+SaveLatestPolicy._CASES = {  # type: ignore[attr-defined]
+    'message': SaveLatestPolicy.Message,
+    'invocation': SaveLatestPolicy.Invocation,
+    'trigger': SaveLatestPolicy.Trigger,
+}
 
-    @staticmethod
-    def lift(raw: _WitVariant) -> SaveLatestPolicy:
-        cls = SaveLatestPolicy._CASES.get(raw.tag)
-        if cls is None:
-            raise ValueError(f'unknown SaveLatestPolicy arm: {raw.tag!r}')
-        return cls(raw.payload)
+
+def _SaveLatestPolicy_lift(raw: _WitVariant) -> SaveLatestPolicy:
+    cls = SaveLatestPolicy._CASES.get(raw.tag)  # type: ignore[attr-defined]
+    if cls is None:
+        raise ValueError(f'unknown SaveLatestPolicy arm: {raw.tag!r}')
+    return cls(raw.payload)
+SaveLatestPolicy.lift = staticmethod(_SaveLatestPolicy_lift)  # type: ignore[attr-defined]
 
 @dataclass(kw_only=True)
 class SessionManager:
@@ -136,26 +158,35 @@ class SummarizingState:
 class ConversationManagerState:
     """Conversation manager snapshot state. Wrapped in ``option<>`` at the
 call site; ``none`` means there's no manager and nothing to persist."""
+    if TYPE_CHECKING:
+        SlidingWindow: ClassVar[type["_ConversationManagerState_SlidingWindow"]]
+        Summarizing: ClassVar[type["_ConversationManagerState_Summarizing"]]
+        _CASES: ClassVar[dict[str, type]]
+        @staticmethod
+        def lift(raw: _WitVariant) -> "ConversationManagerState": ...
 
-    class SlidingWindow(_WitVariantCase):
-        """Sliding-window manager state."""
-        tag = 'sliding-window'
+class _ConversationManagerState_SlidingWindow(_WitVariantCase, ConversationManagerState):
+    """Sliding-window manager state."""
+    tag = 'sliding-window'
+ConversationManagerState.SlidingWindow = _ConversationManagerState_SlidingWindow  # type: ignore[attr-defined]
 
-    class Summarizing(_WitVariantCase):
-        """Summarizing manager state."""
-        tag = 'summarizing'
+class _ConversationManagerState_Summarizing(_WitVariantCase, ConversationManagerState):
+    """Summarizing manager state."""
+    tag = 'summarizing'
+ConversationManagerState.Summarizing = _ConversationManagerState_Summarizing  # type: ignore[attr-defined]
 
-    _CASES: dict[str, type] = {
-        'sliding-window': SlidingWindow,
-        'summarizing': Summarizing,
-    }
+ConversationManagerState._CASES = {  # type: ignore[attr-defined]
+    'sliding-window': ConversationManagerState.SlidingWindow,
+    'summarizing': ConversationManagerState.Summarizing,
+}
 
-    @staticmethod
-    def lift(raw: _WitVariant) -> ConversationManagerState:
-        cls = ConversationManagerState._CASES.get(raw.tag)
-        if cls is None:
-            raise ValueError(f'unknown ConversationManagerState arm: {raw.tag!r}')
-        return cls(raw.payload)
+
+def _ConversationManagerState_lift(raw: _WitVariant) -> ConversationManagerState:
+    cls = ConversationManagerState._CASES.get(raw.tag)  # type: ignore[attr-defined]
+    if cls is None:
+        raise ValueError(f'unknown ConversationManagerState arm: {raw.tag!r}')
+    return cls(raw.payload)
+ConversationManagerState.lift = staticmethod(_ConversationManagerState_lift)  # type: ignore[attr-defined]
 
 @dataclass(kw_only=True)
 class RetryStrategyState:
@@ -201,53 +232,74 @@ class SnapshotManifest:
 
 class StorageError:
     """Why a snapshot operation failed."""
+    if TYPE_CHECKING:
+        NotFound: ClassVar[type["_StorageError_NotFound"]]
+        AccessDenied: ClassVar[type["_StorageError_AccessDenied"]]
+        OutOfSpace: ClassVar[type["_StorageError_OutOfSpace"]]
+        Corrupt: ClassVar[type["_StorageError_Corrupt"]]
+        Conflict: ClassVar[type["_StorageError_Conflict"]]
+        Transient: ClassVar[type["_StorageError_Transient"]]
+        Permanent: ClassVar[type["_StorageError_Permanent"]]
+        UnknownBackend: ClassVar[type["_StorageError_UnknownBackend"]]
+        _CASES: ClassVar[dict[str, type]]
+        @staticmethod
+        def lift(raw: _WitVariant) -> "StorageError": ...
 
-    class NotFound(_WitVariantCase):
-        """No snapshot or manifest at the requested location."""
-        tag = 'not-found'
+class _StorageError_NotFound(_WitVariantCase, StorageError):
+    """No snapshot or manifest at the requested location."""
+    tag = 'not-found'
+StorageError.NotFound = _StorageError_NotFound  # type: ignore[attr-defined]
 
-    class AccessDenied(_WitVariantCase):
-        """Caller lacks permission to read or write the storage."""
-        tag = 'access-denied'
+class _StorageError_AccessDenied(_WitVariantCase, StorageError):
+    """Caller lacks permission to read or write the storage."""
+    tag = 'access-denied'
+StorageError.AccessDenied = _StorageError_AccessDenied  # type: ignore[attr-defined]
 
-    class OutOfSpace(_WitVariantCase):
-        """Backing storage is full or over quota."""
-        tag = 'out-of-space'
+class _StorageError_OutOfSpace(_WitVariantCase, StorageError):
+    """Backing storage is full or over quota."""
+    tag = 'out-of-space'
+StorageError.OutOfSpace = _StorageError_OutOfSpace  # type: ignore[attr-defined]
 
-    class Corrupt(_WitVariantCase):
-        """Snapshot is malformed or cannot be deserialized."""
-        tag = 'corrupt'
+class _StorageError_Corrupt(_WitVariantCase, StorageError):
+    """Snapshot is malformed or cannot be deserialized."""
+    tag = 'corrupt'
+StorageError.Corrupt = _StorageError_Corrupt  # type: ignore[attr-defined]
 
-    class Conflict(_WitVariantCase):
-        """Concurrent writers collided; retrying may succeed."""
-        tag = 'conflict'
+class _StorageError_Conflict(_WitVariantCase, StorageError):
+    """Concurrent writers collided; retrying may succeed."""
+    tag = 'conflict'
+StorageError.Conflict = _StorageError_Conflict  # type: ignore[attr-defined]
 
-    class Transient(_WitVariantCase):
-        """Transient I/O failure; retrying may succeed."""
-        tag = 'transient'
+class _StorageError_Transient(_WitVariantCase, StorageError):
+    """Transient I/O failure; retrying may succeed."""
+    tag = 'transient'
+StorageError.Transient = _StorageError_Transient  # type: ignore[attr-defined]
 
-    class Permanent(_WitVariantCase):
-        """Permanent backend failure."""
-        tag = 'permanent'
+class _StorageError_Permanent(_WitVariantCase, StorageError):
+    """Permanent backend failure."""
+    tag = 'permanent'
+StorageError.Permanent = _StorageError_Permanent  # type: ignore[attr-defined]
 
-    class UnknownBackend(_WitVariantCase):
-        """No custom backend registered for the given backend-id."""
-        tag = 'unknown-backend'
+class _StorageError_UnknownBackend(_WitVariantCase, StorageError):
+    """No custom backend registered for the given backend-id."""
+    tag = 'unknown-backend'
+StorageError.UnknownBackend = _StorageError_UnknownBackend  # type: ignore[attr-defined]
 
-    _CASES: dict[str, type] = {
-        'not-found': NotFound,
-        'access-denied': AccessDenied,
-        'out-of-space': OutOfSpace,
-        'corrupt': Corrupt,
-        'conflict': Conflict,
-        'transient': Transient,
-        'permanent': Permanent,
-        'unknown-backend': UnknownBackend,
-    }
+StorageError._CASES = {  # type: ignore[attr-defined]
+    'not-found': StorageError.NotFound,
+    'access-denied': StorageError.AccessDenied,
+    'out-of-space': StorageError.OutOfSpace,
+    'corrupt': StorageError.Corrupt,
+    'conflict': StorageError.Conflict,
+    'transient': StorageError.Transient,
+    'permanent': StorageError.Permanent,
+    'unknown-backend': StorageError.UnknownBackend,
+}
 
-    @staticmethod
-    def lift(raw: _WitVariant) -> StorageError:
-        cls = StorageError._CASES.get(raw.tag)
-        if cls is None:
-            raise ValueError(f'unknown StorageError arm: {raw.tag!r}')
-        return cls(raw.payload)
+
+def _StorageError_lift(raw: _WitVariant) -> StorageError:
+    cls = StorageError._CASES.get(raw.tag)  # type: ignore[attr-defined]
+    if cls is None:
+        raise ValueError(f'unknown StorageError arm: {raw.tag!r}')
+    return cls(raw.payload)
+StorageError.lift = staticmethod(_StorageError_lift)  # type: ignore[attr-defined]

@@ -5,7 +5,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Optional, Union
+from typing import Any, ClassVar, Optional, TYPE_CHECKING, Union
 
 from wasmtime.component import Variant as _WitVariant
 from wasmtime.component import VariantCase as _WitVariantCase

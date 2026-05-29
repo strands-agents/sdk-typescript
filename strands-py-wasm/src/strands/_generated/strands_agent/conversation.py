@@ -5,7 +5,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Optional, Union
+from typing import Any, ClassVar, Optional, TYPE_CHECKING, Union
 
 from wasmtime.component import Variant as _WitVariant
 from wasmtime.component import VariantCase as _WitVariantCase
@@ -35,23 +35,32 @@ class ConversationManagerConfig:
     """Which conversation manager the agent uses. Wrapped in
 ``option<>`` at the call site; ``none`` means history grows without
 bound and context-overflow errors propagate to the caller."""
+    if TYPE_CHECKING:
+        SlidingWindow: ClassVar[type["_ConversationManagerConfig_SlidingWindow"]]
+        Summarizing: ClassVar[type["_ConversationManagerConfig_Summarizing"]]
+        _CASES: ClassVar[dict[str, type]]
+        @staticmethod
+        def lift(raw: _WitVariant) -> "ConversationManagerConfig": ...
 
-    class SlidingWindow(_WitVariantCase):
-        """Sliding-window trimming."""
-        tag = 'sliding-window'
+class _ConversationManagerConfig_SlidingWindow(_WitVariantCase, ConversationManagerConfig):
+    """Sliding-window trimming."""
+    tag = 'sliding-window'
+ConversationManagerConfig.SlidingWindow = _ConversationManagerConfig_SlidingWindow  # type: ignore[attr-defined]
 
-    class Summarizing(_WitVariantCase):
-        """Summarization of older messages."""
-        tag = 'summarizing'
+class _ConversationManagerConfig_Summarizing(_WitVariantCase, ConversationManagerConfig):
+    """Summarization of older messages."""
+    tag = 'summarizing'
+ConversationManagerConfig.Summarizing = _ConversationManagerConfig_Summarizing  # type: ignore[attr-defined]
 
-    _CASES: dict[str, type] = {
-        'sliding-window': SlidingWindow,
-        'summarizing': Summarizing,
-    }
+ConversationManagerConfig._CASES = {  # type: ignore[attr-defined]
+    'sliding-window': ConversationManagerConfig.SlidingWindow,
+    'summarizing': ConversationManagerConfig.Summarizing,
+}
 
-    @staticmethod
-    def lift(raw: _WitVariant) -> ConversationManagerConfig:
-        cls = ConversationManagerConfig._CASES.get(raw.tag)
-        if cls is None:
-            raise ValueError(f'unknown ConversationManagerConfig arm: {raw.tag!r}')
-        return cls(raw.payload)
+
+def _ConversationManagerConfig_lift(raw: _WitVariant) -> ConversationManagerConfig:
+    cls = ConversationManagerConfig._CASES.get(raw.tag)  # type: ignore[attr-defined]
+    if cls is None:
+        raise ValueError(f'unknown ConversationManagerConfig arm: {raw.tag!r}')
+    return cls(raw.payload)
+ConversationManagerConfig.lift = staticmethod(_ConversationManagerConfig_lift)  # type: ignore[attr-defined]

@@ -5,7 +5,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Optional, Union
+from typing import Any, ClassVar, Optional, TYPE_CHECKING, Union
 
 from wasmtime.component import Variant as _WitVariant
 from wasmtime.component import VariantCase as _WitVariantCase
@@ -53,31 +53,42 @@ class ExponentialBackoff:
 
 class BackoffStrategy:
     """Backoff curve applied between attempts."""
+    if TYPE_CHECKING:
+        Constant: ClassVar[type["_BackoffStrategy_Constant"]]
+        Linear: ClassVar[type["_BackoffStrategy_Linear"]]
+        Exponential: ClassVar[type["_BackoffStrategy_Exponential"]]
+        _CASES: ClassVar[dict[str, type]]
+        @staticmethod
+        def lift(raw: _WitVariant) -> "BackoffStrategy": ...
 
-    class Constant(_WitVariantCase):
-        """Fixed delay."""
-        tag = 'constant'
+class _BackoffStrategy_Constant(_WitVariantCase, BackoffStrategy):
+    """Fixed delay."""
+    tag = 'constant'
+BackoffStrategy.Constant = _BackoffStrategy_Constant  # type: ignore[attr-defined]
 
-    class Linear(_WitVariantCase):
-        """Linear growth."""
-        tag = 'linear'
+class _BackoffStrategy_Linear(_WitVariantCase, BackoffStrategy):
+    """Linear growth."""
+    tag = 'linear'
+BackoffStrategy.Linear = _BackoffStrategy_Linear  # type: ignore[attr-defined]
 
-    class Exponential(_WitVariantCase):
-        """Exponential growth."""
-        tag = 'exponential'
+class _BackoffStrategy_Exponential(_WitVariantCase, BackoffStrategy):
+    """Exponential growth."""
+    tag = 'exponential'
+BackoffStrategy.Exponential = _BackoffStrategy_Exponential  # type: ignore[attr-defined]
 
-    _CASES: dict[str, type] = {
-        'constant': Constant,
-        'linear': Linear,
-        'exponential': Exponential,
-    }
+BackoffStrategy._CASES = {  # type: ignore[attr-defined]
+    'constant': BackoffStrategy.Constant,
+    'linear': BackoffStrategy.Linear,
+    'exponential': BackoffStrategy.Exponential,
+}
 
-    @staticmethod
-    def lift(raw: _WitVariant) -> BackoffStrategy:
-        cls = BackoffStrategy._CASES.get(raw.tag)
-        if cls is None:
-            raise ValueError(f'unknown BackoffStrategy arm: {raw.tag!r}')
-        return cls(raw.payload)
+
+def _BackoffStrategy_lift(raw: _WitVariant) -> BackoffStrategy:
+    cls = BackoffStrategy._CASES.get(raw.tag)  # type: ignore[attr-defined]
+    if cls is None:
+        raise ValueError(f'unknown BackoffStrategy arm: {raw.tag!r}')
+    return cls(raw.payload)
+BackoffStrategy.lift = staticmethod(_BackoffStrategy_lift)  # type: ignore[attr-defined]
 
 @dataclass(kw_only=True)
 class ModelRetryStrategy:

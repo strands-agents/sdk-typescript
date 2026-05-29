@@ -7,6 +7,9 @@ on:
 
 jobs:
   authorization-check:
+    # Authors who opt out of auto-review. They can still trigger it manually
+    # by commenting ``/strands review`` on the PR.
+    if: ${{ !contains(fromJSON('["chaynabors"]'), github.event.pull_request.user.login) }}
     name: Check access
     permissions: read-all
     runs-on: ubuntu-latest

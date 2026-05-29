@@ -5,7 +5,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Optional, Union
+from typing import Any, ClassVar, Optional, TYPE_CHECKING, Union
 
 from wasmtime.component import Variant as _WitVariant
 from wasmtime.component import VariantCase as _WitVariantCase
@@ -23,23 +23,32 @@ class TriggerParams:
 
 class TriggerError:
     """Why a trigger evaluation failed."""
+    if TYPE_CHECKING:
+        Unknown: ClassVar[type["_TriggerError_Unknown"]]
+        Failed: ClassVar[type["_TriggerError_Failed"]]
+        _CASES: ClassVar[dict[str, type]]
+        @staticmethod
+        def lift(raw: _WitVariant) -> "TriggerError": ...
 
-    class Unknown(_WitVariantCase):
-        """No trigger registered for the given id."""
-        tag = 'unknown'
+class _TriggerError_Unknown(_WitVariantCase, TriggerError):
+    """No trigger registered for the given id."""
+    tag = 'unknown'
+TriggerError.Unknown = _TriggerError_Unknown  # type: ignore[attr-defined]
 
-    class Failed(_WitVariantCase):
-        """Trigger raised an exception."""
-        tag = 'failed'
+class _TriggerError_Failed(_WitVariantCase, TriggerError):
+    """Trigger raised an exception."""
+    tag = 'failed'
+TriggerError.Failed = _TriggerError_Failed  # type: ignore[attr-defined]
 
-    _CASES: dict[str, type] = {
-        'unknown': Unknown,
-        'failed': Failed,
-    }
+TriggerError._CASES = {  # type: ignore[attr-defined]
+    'unknown': TriggerError.Unknown,
+    'failed': TriggerError.Failed,
+}
 
-    @staticmethod
-    def lift(raw: _WitVariant) -> TriggerError:
-        cls = TriggerError._CASES.get(raw.tag)
-        if cls is None:
-            raise ValueError(f'unknown TriggerError arm: {raw.tag!r}')
-        return cls(raw.payload)
+
+def _TriggerError_lift(raw: _WitVariant) -> TriggerError:
+    cls = TriggerError._CASES.get(raw.tag)  # type: ignore[attr-defined]
+    if cls is None:
+        raise ValueError(f'unknown TriggerError arm: {raw.tag!r}')
+    return cls(raw.payload)
+TriggerError.lift = staticmethod(_TriggerError_lift)  # type: ignore[attr-defined]

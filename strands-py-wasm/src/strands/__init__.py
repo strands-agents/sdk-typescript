@@ -22,30 +22,20 @@ from collections.abc import AsyncIterator, Awaitable, Callable, Iterable
 from dataclasses import asdict, is_dataclass
 from typing import Any, Protocol, TypeVar, get_type_hints, runtime_checkable
 
-from wasmtime.component import VariantCase as _WitVariantCase
+from strands import _marshalling, types
 
-from strands import types
-
-# Hot-path types users import directly from ``strands``. Wire types not
-# given an SDK shim below (FileStorage, S3Storage, ...) are passthroughs;
-# re-exported here so ``from strands import FileStorage`` works without
-# making users reach into ``strands.types``.
+# First-class types users construct when wiring up an agent. Anything reached
+# only through return values or pattern matching (StreamEvent, Interrupt,
+# StopReason, Metrics, Usage, ContentBlock arms, etc.) lives in
+# :mod:`strands.types` and is imported from there when needed.
 from strands.types import (  # noqa: F401
     AgentSkills,
-    ContentBlock,
     ContextOffloader,
     CustomStorage,
     FileStorage,
-    Interrupt,
-    Metrics,
-    Role,
     S3Storage,
     SlidingWindowConversationManager,
-    StopReason,
-    StreamEvent,
     SummarizingConversationManager,
-    ToolError,
-    Usage,
 )
 
 
@@ -97,76 +87,23 @@ class SessionError(StrandsError):
     """Session storage read/write failed."""
 
 
-def _extras_to_json(extras: dict[str, Any] | None) -> str | None:
-    return json.dumps(extras) if extras else None
-
-
-_CONTENT_ARM_BY_TYPE: dict[type, type] = {
-    types.TextBlock: types.ContentBlock.Text,
-    types.JsonBlock: types.ContentBlock.Json,
-    types.ToolUseBlock: types.ContentBlock.ToolUse,
-    types.ToolResultBlock: types.ContentBlock.ToolResult,
-    types.ReasoningBlock: types.ContentBlock.Reasoning,
-    types.CachePointBlock: types.ContentBlock.CachePoint,
-    types.ImageBlock: types.ContentBlock.Image,
-    types.VideoBlock: types.ContentBlock.Video,
-    types.DocumentBlock: types.ContentBlock.Document,
-    types.CitationsBlock: types.ContentBlock.Citations,
-    types.InterruptResponseBlock: types.ContentBlock.InterruptResponse,
-}
-
-
-def _as_content_block(item: Any) -> Any:
-    """Wrap any accepted content shape as a ``ContentBlock`` variant arm."""
-    if isinstance(item, str):
-        return types.ContentBlock.Text(types.TextBlock(text=item))
-    for block_type, arm in _CONTENT_ARM_BY_TYPE.items():
-        if isinstance(item, block_type):
-            return arm(item)
-    return item  # already a ContentBlock variant arm
-
-
-_MODEL_ARM_BY_TYPE: dict[type, type] = {
-    types.BedrockModel: types.ModelConfig.Bedrock,
-    types.AnthropicModel: types.ModelConfig.Anthropic,
-    types.OpenaiModel: types.ModelConfig.Openai,
-    types.GoogleModel: types.ModelConfig.Gemini,
-    types.CustomModel: types.ModelConfig.Custom,
-}
-
-_CM_ARM_BY_TYPE: dict[type, type] = {
-    types.SlidingWindowConversationManager: types.ConversationManagerConfig.SlidingWindow,
-    types.SummarizingConversationManager: types.ConversationManagerConfig.Summarizing,
-}
-
-_VENDED_TOOL_ARM_BY_TYPE: dict[type, type] = {
-    types.BashTool: types.VendedTool.Bash,
-    types.FileEditorTool: types.VendedTool.FileEditor,
-    types.HttpRequestTool: types.VendedTool.HttpRequest,
-    types.NotebookTool: types.VendedTool.Notebook,
-}
-
-_VENDED_PLUGIN_ARM_BY_TYPE: dict[type, type] = {
-    types.AgentSkills: types.VendedPlugin.Skills,
-    types.ContextOffloader: types.VendedPlugin.ContextOffloader,
-}
-
-
-def _wrap(value: Any, arm_table: dict[type, type]) -> Any:
-    """Wrap ``value`` in the variant arm whose payload type matches its MRO.
-
-    Walks the MRO so SDK ergonomic subclasses (``BedrockModel`` extends
-    ``types.BedrockModel``) hit the same arm as the raw bindgen type. Returns
-    the value unchanged if it's already an arm (so passing a fully-constructed
-    ``ModelConfig.Bedrock(...)`` is idempotent) or doesn't match anything.
-    """
-    if value is None or isinstance(value, _WitVariantCase):
-        return value
-    for cls in type(value).__mro__:
-        arm = arm_table.get(cls)
-        if arm is not None:
-            return arm(value)
-    return value
+# Bare payload records the user can pass as content. The SDK wraps each one
+# in the matching ``ContentBlock`` arm before sending it on the wire.
+_ContentPayload = (
+    types.TextBlock
+    | types.JsonBlock
+    | types.ToolUseBlock
+    | types.ToolResultBlock
+    | types.ReasoningBlock
+    | types.CachePointBlock
+    | types.ImageBlock
+    | types.VideoBlock
+    | types.DocumentBlock
+    | types.CitationsBlock
+    | types.InterruptResponseBlock
+)
+ContentInput = str | _ContentPayload | types.ContentBlock
+PromptInput = str | list[ContentInput]
 
 
 class Message(types.Message):
@@ -174,21 +111,21 @@ class Message(types.Message):
         self,
         *,
         role: types.Role,
-        content: Iterable[Any],
+        content: Iterable[ContentInput],
         metadata: types.MessageMetadata | None = None,
     ) -> None:
         super().__init__(
             role=role,
-            content=[_as_content_block(c) for c in content],
+            content=[_marshalling.as_content_block(c) for c in content],
             metadata=metadata,
         )
 
     @classmethod
-    def user(cls, *content: Any, metadata: types.MessageMetadata | None = None) -> Message:
+    def user(cls, *content: ContentInput, metadata: types.MessageMetadata | None = None) -> Message:
         return cls(role=types.Role.USER, content=content, metadata=metadata)
 
     @classmethod
-    def assistant(cls, *content: Any, metadata: types.MessageMetadata | None = None) -> Message:
+    def assistant(cls, *content: ContentInput, metadata: types.MessageMetadata | None = None) -> Message:
         return cls(role=types.Role.ASSISTANT, content=content, metadata=metadata)
 
 
@@ -225,23 +162,23 @@ class BedrockModel(types.BedrockModel):
             access_key_id=access_key_id,
             secret_access_key=secret_access_key,
             session_token=session_token,
-            additional_config=_extras_to_json(extras),
+            additional_config=_marshalling.extras_to_json(extras),
         )
 
 
 class AnthropicModel(types.AnthropicModel):
     def __init__(self, model_id: str | None = None, *, api_key: str | None = None, **extras: Any) -> None:
-        super().__init__(model_id=model_id, api_key=api_key, additional_config=_extras_to_json(extras))
+        super().__init__(model_id=model_id, api_key=api_key, additional_config=_marshalling.extras_to_json(extras))
 
 
 class OpenaiModel(types.OpenaiModel):
     def __init__(self, model_id: str | None = None, *, api_key: str | None = None, **extras: Any) -> None:
-        super().__init__(model_id=model_id, api_key=api_key, additional_config=_extras_to_json(extras))
+        super().__init__(model_id=model_id, api_key=api_key, additional_config=_marshalling.extras_to_json(extras))
 
 
 class GoogleModel(types.GoogleModel):
     def __init__(self, model_id: str | None = None, *, api_key: str | None = None, **extras: Any) -> None:
-        super().__init__(model_id=model_id, api_key=api_key, additional_config=_extras_to_json(extras))
+        super().__init__(model_id=model_id, api_key=api_key, additional_config=_marshalling.extras_to_json(extras))
 
 
 class CustomModel(types.CustomModel):
@@ -256,17 +193,9 @@ class CustomModel(types.CustomModel):
         super().__init__(
             provider_id=provider_id,
             model_id=model_id,
-            additional_config=_extras_to_json(extras),
+            additional_config=_marshalling.extras_to_json(extras),
             stateful=stateful,
         )
-
-
-def _json_default(obj: Any) -> Any:
-    if is_dataclass(obj) and not isinstance(obj, type):
-        return asdict(obj)
-    if hasattr(obj, "__dict__"):
-        return {k: v for k, v in obj.__dict__.items() if not k.startswith("_")}
-    raise TypeError(f"Object of type {type(obj).__name__} is not JSON serializable")
 
 
 def agent_node(*, id: str, agent_config: Any, description: str | None, timeout: int | None) -> types.AgentNode:
@@ -276,13 +205,17 @@ def agent_node(*, id: str, agent_config: Any, description: str | None, timeout: 
     object with a ``__dict__``; serialization happens here so call sites
     don't import :mod:`json`.
     """
-    encoded = agent_config if isinstance(agent_config, str) else json.dumps(agent_config, default=_json_default)
+    encoded = (
+        agent_config if isinstance(agent_config, str) else json.dumps(agent_config, default=_marshalling.json_default)
+    )
     return types.AgentNode(id=id, description=description, timeout=timeout, agent_config=encoded)
 
 
 def multi_agent_node(*, id: str, orchestrator: Any, description: str | None) -> types.MultiAgentNode:
     """Build a ``MultiAgentNode`` with a JSON-encoded nested orchestrator."""
-    encoded = orchestrator if isinstance(orchestrator, str) else json.dumps(orchestrator, default=_json_default)
+    encoded = (
+        orchestrator if isinstance(orchestrator, str) else json.dumps(orchestrator, default=_marshalling.json_default)
+    )
     return types.MultiAgentNode(id=id, description=description, orchestrator=encoded)
 
 
@@ -409,45 +342,6 @@ def _coerce_tool_result(result: Any) -> list[Any]:
     return [types.ToolResultContent.Text(types.TextBlock(text=str(result)))]
 
 
-def _py_type_to_schema(py_type: Any) -> dict[str, Any]:
-    import types
-
-    origin = typing.get_origin(py_type)
-
-    # Strip Annotated[T, ...] -- only the runtime type matters for the schema.
-    if origin is typing.Annotated:
-        return _py_type_to_schema(typing.get_args(py_type)[0])
-
-    # Optional[T] / Union[T, None] / T | None: emit T's schema and mark nullable.
-    if origin is typing.Union or origin is types.UnionType:
-        args = typing.get_args(py_type)
-        non_none = [a for a in args if a is not type(None)]
-        nullable = len(non_none) != len(args)
-        if len(non_none) == 1:
-            schema = _py_type_to_schema(non_none[0])
-            if nullable:
-                schema = {**schema, "nullable": True}
-            return schema
-        return {}  # heterogeneous union -- caller should supply input_schema
-
-    if py_type is str:
-        return {"type": "string"}
-    if py_type is int:
-        return {"type": "integer"}
-    if py_type is float:
-        return {"type": "number"}
-    if py_type is bool:
-        return {"type": "boolean"}
-    if origin is list:
-        args = typing.get_args(py_type)
-        return {"type": "array", "items": _py_type_to_schema(args[0]) if args else {}}
-    if origin is dict:
-        return {"type": "object"}
-    if origin is typing.Literal:
-        return {"enum": list(typing.get_args(py_type))}
-    return {}
-
-
 def tool(
     func: Callable[..., Any] | None = None,
     *,
@@ -462,7 +356,7 @@ def tool(
         properties: dict[str, Any] = {}
         required: list[str] = []
         for param_name, param in sig.parameters.items():
-            properties[param_name] = _py_type_to_schema(hints.get(param_name, str))
+            properties[param_name] = _marshalling.py_type_to_schema(hints.get(param_name, str))
             if param.default is inspect.Parameter.empty:
                 required.append(param_name)
         schema: dict[str, Any] = {"type": "object", "properties": properties}
@@ -479,7 +373,8 @@ def tool(
 
 
 _ToolInput = Tool | PydanticTool | Callable[..., Any]
-_ToolChoiceInput = Any  # tagged ToolChoice variant or "name" shorthand or None
+# String shorthand picks a tool by name; otherwise pass a tagged ToolChoice arm.
+_ToolChoiceInput = str | types.ToolChoice | None
 
 
 def _coerce_tool(item: _ToolInput) -> Tool | PydanticTool:
@@ -490,28 +385,6 @@ def _coerce_tool(item: _ToolInput) -> Tool | PydanticTool:
     raise TypeError(f"unsupported tool: {type(item).__name__}")
 
 
-def _coerce_prompt(value: Any) -> Any:
-    """Coerce a string or iterable of content blocks to a ``prompt-input``."""
-    if isinstance(value, str):
-        return value
-    if isinstance(value, types.Message):
-        raise TypeError(
-            "stream_async/invoke take content blocks as input, not Messages. "
-            "Pass conversation history via Agent(messages=[...]) instead."
-        )
-    if hasattr(value, "__iter__") and not isinstance(value, (bytes, str)):
-        return [_as_content_block(c) for c in value]
-    return value
-
-
-def _coerce_tool_choice(value: _ToolChoiceInput) -> Any:
-    if value is None:
-        return None
-    if isinstance(value, str):
-        return types.ToolChoice.Named(value)
-    return value
-
-
 class Agent:
     """Strands agent. Construct once; call :meth:`invoke` or :meth:`stream_async`."""
 
@@ -520,7 +393,7 @@ class Agent:
         *,
         model: types.ModelInput | None = None,
         messages: list[types.Message] | None = None,
-        system_prompt: str | list[Any] | None = None,
+        system_prompt: PromptInput | None = None,
         tools: list[_ToolInput] | None = None,
         agent_tools: list[types.AgentAsToolConfig] | None = None,
         vended_tools: list[types.VendedToolInput] | None = None,
@@ -545,16 +418,20 @@ class Agent:
         if name is not None or id is not None or description is not None:
             identity = types.AgentIdentity(name=name, id=id, description=description)
 
-        wrapped_vended_tools = [_wrap(v, _VENDED_TOOL_ARM_BY_TYPE) for v in vended_tools] if vended_tools else None
+        wrapped_vended_tools = (
+            [_marshalling.wrap(v, _marshalling.VENDED_TOOL_ARM_BY_TYPE) for v in vended_tools] if vended_tools else None
+        )
         wrapped_vended_plugins = (
-            [_wrap(p, _VENDED_PLUGIN_ARM_BY_TYPE) for p in vended_plugins] if vended_plugins else None
+            [_marshalling.wrap(p, _marshalling.VENDED_PLUGIN_ARM_BY_TYPE) for p in vended_plugins]
+            if vended_plugins
+            else None
         )
 
         self._config = types.AgentConfig(
-            model=_wrap(model, _MODEL_ARM_BY_TYPE),
+            model=_marshalling.wrap(model, _marshalling.MODEL_ARM_BY_TYPE),
             model_params=None,
             messages=messages,
-            system_prompt=(_coerce_prompt(system_prompt) if system_prompt is not None else None),
+            system_prompt=(_marshalling.coerce_prompt(system_prompt) if system_prompt is not None else None),
             tools=[t.to_spec() for t in self._tools] or None,
             agent_tools=agent_tools,
             vended_tools=wrapped_vended_tools,
@@ -566,7 +443,7 @@ class Agent:
             trace_attributes=trace_attributes,
             trace_context=trace_context,
             session=session,
-            conversation_manager=_wrap(conversation_manager, _CM_ARM_BY_TYPE),
+            conversation_manager=_marshalling.wrap(conversation_manager, _marshalling.CM_ARM_BY_TYPE),
             retry=retry,
             structured_output_schema=structured_output_schema,
             app_state=json.dumps(app_state) if app_state else None,
@@ -598,22 +475,22 @@ class Agent:
 
     def _build_invoke_args(
         self,
-        prompt: Any,
+        prompt: PromptInput,
         tools: list[_ToolInput] | None,
         tool_choice: _ToolChoiceInput,
         structured_output_schema: str | None,
     ) -> types.InvokeArgs:
         extra_tools = [_coerce_tool(t).to_spec() for t in (tools or [])] or None
         return types.InvokeArgs(
-            input=_coerce_prompt(prompt),
+            input=_marshalling.coerce_prompt(prompt),
             tools=extra_tools,
-            tool_choice=_coerce_tool_choice(tool_choice),
+            tool_choice=_marshalling.coerce_tool_choice(tool_choice),
             structured_output_schema=structured_output_schema,
         )
 
     async def stream_async(
         self,
-        prompt: Any,
+        prompt: PromptInput,
         *,
         tools: list[_ToolInput] | None = None,
         tool_choice: _ToolChoiceInput = None,
@@ -628,7 +505,7 @@ class Agent:
 
     async def invoke_async(
         self,
-        prompt: Any,
+        prompt: PromptInput,
         *,
         tools: list[_ToolInput] | None = None,
         tool_choice: _ToolChoiceInput = None,
@@ -647,7 +524,7 @@ class Agent:
 
     def invoke(
         self,
-        prompt: Any,
+        prompt: PromptInput,
         *,
         tools: list[_ToolInput] | None = None,
         tool_choice: _ToolChoiceInput = None,
@@ -739,8 +616,8 @@ class _AgentResultAccumulator:
         )
 
 
-_HookEventT = TypeVar("_HookEventT")
-_HookCallback = Callable[[Any], Any]
+_HookEventT = TypeVar("_HookEventT", bound=types.StreamEvent)
+_HookCallback = Callable[[types.StreamEvent], Any]
 
 
 @runtime_checkable

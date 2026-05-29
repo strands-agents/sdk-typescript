@@ -5,7 +5,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Optional, Union
+from typing import Any, ClassVar, Optional, TYPE_CHECKING, Union
 
 from wasmtime.component import Variant as _WitVariant
 from wasmtime.component import VariantCase as _WitVariantCase
@@ -117,26 +117,35 @@ class GuardContentImage:
 
 class GuardContentBlock:
     """Content submitted to a guardrail for evaluation."""
+    if TYPE_CHECKING:
+        Text: ClassVar[type["_GuardContentBlock_Text"]]
+        Image: ClassVar[type["_GuardContentBlock_Image"]]
+        _CASES: ClassVar[dict[str, type]]
+        @staticmethod
+        def lift(raw: _WitVariant) -> "GuardContentBlock": ...
 
-    class Text(_WitVariantCase):
-        """Text guard content."""
-        tag = 'text'
+class _GuardContentBlock_Text(_WitVariantCase, GuardContentBlock):
+    """Text guard content."""
+    tag = 'text'
+GuardContentBlock.Text = _GuardContentBlock_Text  # type: ignore[attr-defined]
 
-    class Image(_WitVariantCase):
-        """Image guard content."""
-        tag = 'image'
+class _GuardContentBlock_Image(_WitVariantCase, GuardContentBlock):
+    """Image guard content."""
+    tag = 'image'
+GuardContentBlock.Image = _GuardContentBlock_Image  # type: ignore[attr-defined]
 
-    _CASES: dict[str, type] = {
-        'text': Text,
-        'image': Image,
-    }
+GuardContentBlock._CASES = {  # type: ignore[attr-defined]
+    'text': GuardContentBlock.Text,
+    'image': GuardContentBlock.Image,
+}
 
-    @staticmethod
-    def lift(raw: _WitVariant) -> GuardContentBlock:
-        cls = GuardContentBlock._CASES.get(raw.tag)
-        if cls is None:
-            raise ValueError(f'unknown GuardContentBlock arm: {raw.tag!r}')
-        return cls(raw.payload)
+
+def _GuardContentBlock_lift(raw: _WitVariant) -> GuardContentBlock:
+    cls = GuardContentBlock._CASES.get(raw.tag)  # type: ignore[attr-defined]
+    if cls is None:
+        raise ValueError(f'unknown GuardContentBlock arm: {raw.tag!r}')
+    return cls(raw.payload)
+GuardContentBlock.lift = staticmethod(_GuardContentBlock_lift)  # type: ignore[attr-defined]
 
 @dataclass(kw_only=True)
 class DocumentRange:
@@ -163,41 +172,56 @@ class WebLocation:
 
 class CitationLocation:
     """Anchor a citation points to."""
+    if TYPE_CHECKING:
+        DocumentChar: ClassVar[type["_CitationLocation_DocumentChar"]]
+        DocumentPage: ClassVar[type["_CitationLocation_DocumentPage"]]
+        DocumentChunk: ClassVar[type["_CitationLocation_DocumentChunk"]]
+        SearchResult: ClassVar[type["_CitationLocation_SearchResult"]]
+        Web: ClassVar[type["_CitationLocation_Web"]]
+        _CASES: ClassVar[dict[str, type]]
+        @staticmethod
+        def lift(raw: _WitVariant) -> "CitationLocation": ...
 
-    class DocumentChar(_WitVariantCase):
-        """Character range within a document."""
-        tag = 'document-char'
+class _CitationLocation_DocumentChar(_WitVariantCase, CitationLocation):
+    """Character range within a document."""
+    tag = 'document-char'
+CitationLocation.DocumentChar = _CitationLocation_DocumentChar  # type: ignore[attr-defined]
 
-    class DocumentPage(_WitVariantCase):
-        """Page range within a document."""
-        tag = 'document-page'
+class _CitationLocation_DocumentPage(_WitVariantCase, CitationLocation):
+    """Page range within a document."""
+    tag = 'document-page'
+CitationLocation.DocumentPage = _CitationLocation_DocumentPage  # type: ignore[attr-defined]
 
-    class DocumentChunk(_WitVariantCase):
-        """Chunk range within a document."""
-        tag = 'document-chunk'
+class _CitationLocation_DocumentChunk(_WitVariantCase, CitationLocation):
+    """Chunk range within a document."""
+    tag = 'document-chunk'
+CitationLocation.DocumentChunk = _CitationLocation_DocumentChunk  # type: ignore[attr-defined]
 
-    class SearchResult(_WitVariantCase):
-        """Range within a search result."""
-        tag = 'search-result'
+class _CitationLocation_SearchResult(_WitVariantCase, CitationLocation):
+    """Range within a search result."""
+    tag = 'search-result'
+CitationLocation.SearchResult = _CitationLocation_SearchResult  # type: ignore[attr-defined]
 
-    class Web(_WitVariantCase):
-        """Web page."""
-        tag = 'web'
+class _CitationLocation_Web(_WitVariantCase, CitationLocation):
+    """Web page."""
+    tag = 'web'
+CitationLocation.Web = _CitationLocation_Web  # type: ignore[attr-defined]
 
-    _CASES: dict[str, type] = {
-        'document-char': DocumentChar,
-        'document-page': DocumentPage,
-        'document-chunk': DocumentChunk,
-        'search-result': SearchResult,
-        'web': Web,
-    }
+CitationLocation._CASES = {  # type: ignore[attr-defined]
+    'document-char': CitationLocation.DocumentChar,
+    'document-page': CitationLocation.DocumentPage,
+    'document-chunk': CitationLocation.DocumentChunk,
+    'search-result': CitationLocation.SearchResult,
+    'web': CitationLocation.Web,
+}
 
-    @staticmethod
-    def lift(raw: _WitVariant) -> CitationLocation:
-        cls = CitationLocation._CASES.get(raw.tag)
-        if cls is None:
-            raise ValueError(f'unknown CitationLocation arm: {raw.tag!r}')
-        return cls(raw.payload)
+
+def _CitationLocation_lift(raw: _WitVariant) -> CitationLocation:
+    cls = CitationLocation._CASES.get(raw.tag)  # type: ignore[attr-defined]
+    if cls is None:
+        raise ValueError(f'unknown CitationLocation arm: {raw.tag!r}')
+    return cls(raw.payload)
+CitationLocation.lift = staticmethod(_CitationLocation_lift)  # type: ignore[attr-defined]
 
 @dataclass(kw_only=True)
 class CitationText:
@@ -250,41 +274,56 @@ outputs that carry schema-validated data, not prose."""
 
 class ToolResultContent:
     """Block valid inside `tool-result-block.content`. Narrower than `content-block`."""
+    if TYPE_CHECKING:
+        Text: ClassVar[type["_ToolResultContent_Text"]]
+        Json: ClassVar[type["_ToolResultContent_Json"]]
+        Image: ClassVar[type["_ToolResultContent_Image"]]
+        Video: ClassVar[type["_ToolResultContent_Video"]]
+        Document: ClassVar[type["_ToolResultContent_Document"]]
+        _CASES: ClassVar[dict[str, type]]
+        @staticmethod
+        def lift(raw: _WitVariant) -> "ToolResultContent": ...
 
-    class Text(_WitVariantCase):
-        """Text output."""
-        tag = 'text'
+class _ToolResultContent_Text(_WitVariantCase, ToolResultContent):
+    """Text output."""
+    tag = 'text'
+ToolResultContent.Text = _ToolResultContent_Text  # type: ignore[attr-defined]
 
-    class Json(_WitVariantCase):
-        """Structured JSON output."""
-        tag = 'json'
+class _ToolResultContent_Json(_WitVariantCase, ToolResultContent):
+    """Structured JSON output."""
+    tag = 'json'
+ToolResultContent.Json = _ToolResultContent_Json  # type: ignore[attr-defined]
 
-    class Image(_WitVariantCase):
-        """Image output."""
-        tag = 'image'
+class _ToolResultContent_Image(_WitVariantCase, ToolResultContent):
+    """Image output."""
+    tag = 'image'
+ToolResultContent.Image = _ToolResultContent_Image  # type: ignore[attr-defined]
 
-    class Video(_WitVariantCase):
-        """Video output."""
-        tag = 'video'
+class _ToolResultContent_Video(_WitVariantCase, ToolResultContent):
+    """Video output."""
+    tag = 'video'
+ToolResultContent.Video = _ToolResultContent_Video  # type: ignore[attr-defined]
 
-    class Document(_WitVariantCase):
-        """Document output."""
-        tag = 'document'
+class _ToolResultContent_Document(_WitVariantCase, ToolResultContent):
+    """Document output."""
+    tag = 'document'
+ToolResultContent.Document = _ToolResultContent_Document  # type: ignore[attr-defined]
 
-    _CASES: dict[str, type] = {
-        'text': Text,
-        'json': Json,
-        'image': Image,
-        'video': Video,
-        'document': Document,
-    }
+ToolResultContent._CASES = {  # type: ignore[attr-defined]
+    'text': ToolResultContent.Text,
+    'json': ToolResultContent.Json,
+    'image': ToolResultContent.Image,
+    'video': ToolResultContent.Video,
+    'document': ToolResultContent.Document,
+}
 
-    @staticmethod
-    def lift(raw: _WitVariant) -> ToolResultContent:
-        cls = ToolResultContent._CASES.get(raw.tag)
-        if cls is None:
-            raise ValueError(f'unknown ToolResultContent arm: {raw.tag!r}')
-        return cls(raw.payload)
+
+def _ToolResultContent_lift(raw: _WitVariant) -> ToolResultContent:
+    cls = ToolResultContent._CASES.get(raw.tag)  # type: ignore[attr-defined]
+    if cls is None:
+        raise ValueError(f'unknown ToolResultContent arm: {raw.tag!r}')
+    return cls(raw.payload)
+ToolResultContent.lift = staticmethod(_ToolResultContent_lift)  # type: ignore[attr-defined]
 
 @dataclass(kw_only=True)
 class ToolResultBlock:
@@ -304,76 +343,105 @@ next invocation to resume the paused agent."""
 
 class ContentBlock:
     """Any block that can appear inside a message."""
+    if TYPE_CHECKING:
+        Text: ClassVar[type["_ContentBlock_Text"]]
+        Json: ClassVar[type["_ContentBlock_Json"]]
+        ToolUse: ClassVar[type["_ContentBlock_ToolUse"]]
+        ToolResult: ClassVar[type["_ContentBlock_ToolResult"]]
+        Reasoning: ClassVar[type["_ContentBlock_Reasoning"]]
+        CachePoint: ClassVar[type["_ContentBlock_CachePoint"]]
+        GuardContent: ClassVar[type["_ContentBlock_GuardContent"]]
+        Image: ClassVar[type["_ContentBlock_Image"]]
+        Video: ClassVar[type["_ContentBlock_Video"]]
+        Document: ClassVar[type["_ContentBlock_Document"]]
+        Citations: ClassVar[type["_ContentBlock_Citations"]]
+        InterruptResponse: ClassVar[type["_ContentBlock_InterruptResponse"]]
+        _CASES: ClassVar[dict[str, type]]
+        @staticmethod
+        def lift(raw: _WitVariant) -> "ContentBlock": ...
 
-    class Text(_WitVariantCase):
-        """Plain text."""
-        tag = 'text'
+class _ContentBlock_Text(_WitVariantCase, ContentBlock):
+    """Plain text."""
+    tag = 'text'
+ContentBlock.Text = _ContentBlock_Text  # type: ignore[attr-defined]
 
-    class Json(_WitVariantCase):
-        """Structured JSON payload."""
-        tag = 'json'
+class _ContentBlock_Json(_WitVariantCase, ContentBlock):
+    """Structured JSON payload."""
+    tag = 'json'
+ContentBlock.Json = _ContentBlock_Json  # type: ignore[attr-defined]
 
-    class ToolUse(_WitVariantCase):
-        """Model requested a tool call."""
-        tag = 'tool-use'
+class _ContentBlock_ToolUse(_WitVariantCase, ContentBlock):
+    """Model requested a tool call."""
+    tag = 'tool-use'
+ContentBlock.ToolUse = _ContentBlock_ToolUse  # type: ignore[attr-defined]
 
-    class ToolResult(_WitVariantCase):
-        """Tool call completed."""
-        tag = 'tool-result'
+class _ContentBlock_ToolResult(_WitVariantCase, ContentBlock):
+    """Tool call completed."""
+    tag = 'tool-result'
+ContentBlock.ToolResult = _ContentBlock_ToolResult  # type: ignore[attr-defined]
 
-    class Reasoning(_WitVariantCase):
-        """Model reasoning."""
-        tag = 'reasoning'
+class _ContentBlock_Reasoning(_WitVariantCase, ContentBlock):
+    """Model reasoning."""
+    tag = 'reasoning'
+ContentBlock.Reasoning = _ContentBlock_Reasoning  # type: ignore[attr-defined]
 
-    class CachePoint(_WitVariantCase):
-        """Caching boundary marker."""
-        tag = 'cache-point'
+class _ContentBlock_CachePoint(_WitVariantCase, ContentBlock):
+    """Caching boundary marker."""
+    tag = 'cache-point'
+ContentBlock.CachePoint = _ContentBlock_CachePoint  # type: ignore[attr-defined]
 
-    class GuardContent(_WitVariantCase):
-        """Content submitted for guardrail evaluation."""
-        tag = 'guard-content'
+class _ContentBlock_GuardContent(_WitVariantCase, ContentBlock):
+    """Content submitted for guardrail evaluation."""
+    tag = 'guard-content'
+ContentBlock.GuardContent = _ContentBlock_GuardContent  # type: ignore[attr-defined]
 
-    class Image(_WitVariantCase):
-        """Image."""
-        tag = 'image'
+class _ContentBlock_Image(_WitVariantCase, ContentBlock):
+    """Image."""
+    tag = 'image'
+ContentBlock.Image = _ContentBlock_Image  # type: ignore[attr-defined]
 
-    class Video(_WitVariantCase):
-        """Video."""
-        tag = 'video'
+class _ContentBlock_Video(_WitVariantCase, ContentBlock):
+    """Video."""
+    tag = 'video'
+ContentBlock.Video = _ContentBlock_Video  # type: ignore[attr-defined]
 
-    class Document(_WitVariantCase):
-        """Document."""
-        tag = 'document'
+class _ContentBlock_Document(_WitVariantCase, ContentBlock):
+    """Document."""
+    tag = 'document'
+ContentBlock.Document = _ContentBlock_Document  # type: ignore[attr-defined]
 
-    class Citations(_WitVariantCase):
-        """Citations emitted by the model."""
-        tag = 'citations'
+class _ContentBlock_Citations(_WitVariantCase, ContentBlock):
+    """Citations emitted by the model."""
+    tag = 'citations'
+ContentBlock.Citations = _ContentBlock_Citations  # type: ignore[attr-defined]
 
-    class InterruptResponse(_WitVariantCase):
-        """Response to a prior interrupt, supplied when resuming."""
-        tag = 'interrupt-response'
+class _ContentBlock_InterruptResponse(_WitVariantCase, ContentBlock):
+    """Response to a prior interrupt, supplied when resuming."""
+    tag = 'interrupt-response'
+ContentBlock.InterruptResponse = _ContentBlock_InterruptResponse  # type: ignore[attr-defined]
 
-    _CASES: dict[str, type] = {
-        'text': Text,
-        'json': Json,
-        'tool-use': ToolUse,
-        'tool-result': ToolResult,
-        'reasoning': Reasoning,
-        'cache-point': CachePoint,
-        'guard-content': GuardContent,
-        'image': Image,
-        'video': Video,
-        'document': Document,
-        'citations': Citations,
-        'interrupt-response': InterruptResponse,
-    }
+ContentBlock._CASES = {  # type: ignore[attr-defined]
+    'text': ContentBlock.Text,
+    'json': ContentBlock.Json,
+    'tool-use': ContentBlock.ToolUse,
+    'tool-result': ContentBlock.ToolResult,
+    'reasoning': ContentBlock.Reasoning,
+    'cache-point': ContentBlock.CachePoint,
+    'guard-content': ContentBlock.GuardContent,
+    'image': ContentBlock.Image,
+    'video': ContentBlock.Video,
+    'document': ContentBlock.Document,
+    'citations': ContentBlock.Citations,
+    'interrupt-response': ContentBlock.InterruptResponse,
+}
 
-    @staticmethod
-    def lift(raw: _WitVariant) -> ContentBlock:
-        cls = ContentBlock._CASES.get(raw.tag)
-        if cls is None:
-            raise ValueError(f'unknown ContentBlock arm: {raw.tag!r}')
-        return cls(raw.payload)
+
+def _ContentBlock_lift(raw: _WitVariant) -> ContentBlock:
+    cls = ContentBlock._CASES.get(raw.tag)  # type: ignore[attr-defined]
+    if cls is None:
+        raise ValueError(f'unknown ContentBlock arm: {raw.tag!r}')
+    return cls(raw.payload)
+ContentBlock.lift = staticmethod(_ContentBlock_lift)  # type: ignore[attr-defined]
 
 class Role(str):
     """Who a message is from."""

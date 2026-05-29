@@ -5,7 +5,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Optional, Union
+from typing import Any, ClassVar, Optional, TYPE_CHECKING, Union
 
 from wasmtime.component import Variant as _WitVariant
 from wasmtime.component import VariantCase as _WitVariantCase
@@ -67,31 +67,42 @@ class SseTransport:
 
 class McpTransport:
     """How the client talks to the MCP server."""
+    if TYPE_CHECKING:
+        Stdio: ClassVar[type["_McpTransport_Stdio"]]
+        StreamableHttp: ClassVar[type["_McpTransport_StreamableHttp"]]
+        Sse: ClassVar[type["_McpTransport_Sse"]]
+        _CASES: ClassVar[dict[str, type]]
+        @staticmethod
+        def lift(raw: _WitVariant) -> "McpTransport": ...
 
-    class Stdio(_WitVariantCase):
-        """STDIO transport. Spawn a local process and talk via pipes."""
-        tag = 'stdio'
+class _McpTransport_Stdio(_WitVariantCase, McpTransport):
+    """STDIO transport. Spawn a local process and talk via pipes."""
+    tag = 'stdio'
+McpTransport.Stdio = _McpTransport_Stdio  # type: ignore[attr-defined]
 
-    class StreamableHttp(_WitVariantCase):
-        """Streamable HTTP transport, per the current MCP specification."""
-        tag = 'streamable-http'
+class _McpTransport_StreamableHttp(_WitVariantCase, McpTransport):
+    """Streamable HTTP transport, per the current MCP specification."""
+    tag = 'streamable-http'
+McpTransport.StreamableHttp = _McpTransport_StreamableHttp  # type: ignore[attr-defined]
 
-    class Sse(_WitVariantCase):
-        """Legacy Server-Sent Events transport. Retained for older servers."""
-        tag = 'sse'
+class _McpTransport_Sse(_WitVariantCase, McpTransport):
+    """Legacy Server-Sent Events transport. Retained for older servers."""
+    tag = 'sse'
+McpTransport.Sse = _McpTransport_Sse  # type: ignore[attr-defined]
 
-    _CASES: dict[str, type] = {
-        'stdio': Stdio,
-        'streamable-http': StreamableHttp,
-        'sse': Sse,
-    }
+McpTransport._CASES = {  # type: ignore[attr-defined]
+    'stdio': McpTransport.Stdio,
+    'streamable-http': McpTransport.StreamableHttp,
+    'sse': McpTransport.Sse,
+}
 
-    @staticmethod
-    def lift(raw: _WitVariant) -> McpTransport:
-        cls = McpTransport._CASES.get(raw.tag)
-        if cls is None:
-            raise ValueError(f'unknown McpTransport arm: {raw.tag!r}')
-        return cls(raw.payload)
+
+def _McpTransport_lift(raw: _WitVariant) -> McpTransport:
+    cls = McpTransport._CASES.get(raw.tag)  # type: ignore[attr-defined]
+    if cls is None:
+        raise ValueError(f'unknown McpTransport arm: {raw.tag!r}')
+    return cls(raw.payload)
+McpTransport.lift = staticmethod(_McpTransport_lift)  # type: ignore[attr-defined]
 
 @dataclass(kw_only=True)
 class TasksConfig:

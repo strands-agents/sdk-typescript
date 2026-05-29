@@ -5,7 +5,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Optional, Union
+from typing import Any, ClassVar, Optional, TYPE_CHECKING, Union
 
 from wasmtime.component import Variant as _WitVariant
 from wasmtime.component import VariantCase as _WitVariantCase
@@ -57,42 +57,57 @@ class CustomModel:
 
 class ModelConfig:
     """Which model provider the agent should use."""
+    if TYPE_CHECKING:
+        Anthropic: ClassVar[type["_ModelConfig_Anthropic"]]
+        Bedrock: ClassVar[type["_ModelConfig_Bedrock"]]
+        Openai: ClassVar[type["_ModelConfig_Openai"]]
+        Gemini: ClassVar[type["_ModelConfig_Gemini"]]
+        Custom: ClassVar[type["_ModelConfig_Custom"]]
+        _CASES: ClassVar[dict[str, type]]
+        @staticmethod
+        def lift(raw: _WitVariant) -> "ModelConfig": ...
 
-    class Anthropic(_WitVariantCase):
-        """Anthropic API."""
-        tag = 'anthropic'
+class _ModelConfig_Anthropic(_WitVariantCase, ModelConfig):
+    """Anthropic API."""
+    tag = 'anthropic'
+ModelConfig.Anthropic = _ModelConfig_Anthropic  # type: ignore[attr-defined]
 
-    class Bedrock(_WitVariantCase):
-        """AWS Bedrock."""
-        tag = 'bedrock'
+class _ModelConfig_Bedrock(_WitVariantCase, ModelConfig):
+    """AWS Bedrock."""
+    tag = 'bedrock'
+ModelConfig.Bedrock = _ModelConfig_Bedrock  # type: ignore[attr-defined]
 
-    class Openai(_WitVariantCase):
-        """OpenAI API."""
-        tag = 'openai'
+class _ModelConfig_Openai(_WitVariantCase, ModelConfig):
+    """OpenAI API."""
+    tag = 'openai'
+ModelConfig.Openai = _ModelConfig_Openai  # type: ignore[attr-defined]
 
-    class Gemini(_WitVariantCase):
-        """Google Gemini API."""
-        tag = 'gemini'
+class _ModelConfig_Gemini(_WitVariantCase, ModelConfig):
+    """Google Gemini API."""
+    tag = 'gemini'
+ModelConfig.Gemini = _ModelConfig_Gemini  # type: ignore[attr-defined]
 
-    class Custom(_WitVariantCase):
-        """Custom provider supplied by your application. Implement the
+class _ModelConfig_Custom(_WitVariantCase, ModelConfig):
+    """Custom provider supplied by your application. Implement the
 `model-provider` interface to serve it."""
-        tag = 'custom'
+    tag = 'custom'
+ModelConfig.Custom = _ModelConfig_Custom  # type: ignore[attr-defined]
 
-    _CASES: dict[str, type] = {
-        'anthropic': Anthropic,
-        'bedrock': Bedrock,
-        'openai': Openai,
-        'gemini': Gemini,
-        'custom': Custom,
-    }
+ModelConfig._CASES = {  # type: ignore[attr-defined]
+    'anthropic': ModelConfig.Anthropic,
+    'bedrock': ModelConfig.Bedrock,
+    'openai': ModelConfig.Openai,
+    'gemini': ModelConfig.Gemini,
+    'custom': ModelConfig.Custom,
+}
 
-    @staticmethod
-    def lift(raw: _WitVariant) -> ModelConfig:
-        cls = ModelConfig._CASES.get(raw.tag)
-        if cls is None:
-            raise ValueError(f'unknown ModelConfig arm: {raw.tag!r}')
-        return cls(raw.payload)
+
+def _ModelConfig_lift(raw: _WitVariant) -> ModelConfig:
+    cls = ModelConfig._CASES.get(raw.tag)  # type: ignore[attr-defined]
+    if cls is None:
+        raise ValueError(f'unknown ModelConfig arm: {raw.tag!r}')
+    return cls(raw.payload)
+ModelConfig.lift = staticmethod(_ModelConfig_lift)  # type: ignore[attr-defined]
 
 @dataclass(kw_only=True)
 class ModelParams:
@@ -105,58 +120,81 @@ class ModelParams:
 class ModelError:
     """Why a model call failed. Retry logic keys off of which arm fires, so
 implementations should pick the narrowest one that fits."""
+    if TYPE_CHECKING:
+        UnknownProvider: ClassVar[type["_ModelError_UnknownProvider"]]
+        InvalidRequest: ClassVar[type["_ModelError_InvalidRequest"]]
+        Unauthorized: ClassVar[type["_ModelError_Unauthorized"]]
+        Throttled: ClassVar[type["_ModelError_Throttled"]]
+        ServerError: ClassVar[type["_ModelError_ServerError"]]
+        ContextWindowExceeded: ClassVar[type["_ModelError_ContextWindowExceeded"]]
+        ContentFiltered: ClassVar[type["_ModelError_ContentFiltered"]]
+        Transient: ClassVar[type["_ModelError_Transient"]]
+        Internal: ClassVar[type["_ModelError_Internal"]]
+        _CASES: ClassVar[dict[str, type]]
+        @staticmethod
+        def lift(raw: _WitVariant) -> "ModelError": ...
 
-    class UnknownProvider(_WitVariantCase):
-        """No provider registered for the given `provider-id`."""
-        tag = 'unknown-provider'
+class _ModelError_UnknownProvider(_WitVariantCase, ModelError):
+    """No provider registered for the given `provider-id`."""
+    tag = 'unknown-provider'
+ModelError.UnknownProvider = _ModelError_UnknownProvider  # type: ignore[attr-defined]
 
-    class InvalidRequest(_WitVariantCase):
-        """Provider refused the request due to malformed input."""
-        tag = 'invalid-request'
+class _ModelError_InvalidRequest(_WitVariantCase, ModelError):
+    """Provider refused the request due to malformed input."""
+    tag = 'invalid-request'
+ModelError.InvalidRequest = _ModelError_InvalidRequest  # type: ignore[attr-defined]
 
-    class Unauthorized(_WitVariantCase):
-        """Caller lacks permission (missing or expired credentials)."""
-        tag = 'unauthorized'
+class _ModelError_Unauthorized(_WitVariantCase, ModelError):
+    """Caller lacks permission (missing or expired credentials)."""
+    tag = 'unauthorized'
+ModelError.Unauthorized = _ModelError_Unauthorized  # type: ignore[attr-defined]
 
-    class Throttled(_WitVariantCase):
-        """Provider returned a rate-limit error. Retry after a backoff."""
-        tag = 'throttled'
+class _ModelError_Throttled(_WitVariantCase, ModelError):
+    """Provider returned a rate-limit error. Retry after a backoff."""
+    tag = 'throttled'
+ModelError.Throttled = _ModelError_Throttled  # type: ignore[attr-defined]
 
-    class ServerError(_WitVariantCase):
-        """Provider returned a server-side error. Retry may succeed."""
-        tag = 'server-error'
+class _ModelError_ServerError(_WitVariantCase, ModelError):
+    """Provider returned a server-side error. Retry may succeed."""
+    tag = 'server-error'
+ModelError.ServerError = _ModelError_ServerError  # type: ignore[attr-defined]
 
-    class ContextWindowExceeded(_WitVariantCase):
-        """Request exceeded the model's context window."""
-        tag = 'context-window-exceeded'
+class _ModelError_ContextWindowExceeded(_WitVariantCase, ModelError):
+    """Request exceeded the model's context window."""
+    tag = 'context-window-exceeded'
+ModelError.ContextWindowExceeded = _ModelError_ContextWindowExceeded  # type: ignore[attr-defined]
 
-    class ContentFiltered(_WitVariantCase):
-        """Content was rejected by provider safety policy."""
-        tag = 'content-filtered'
+class _ModelError_ContentFiltered(_WitVariantCase, ModelError):
+    """Content was rejected by provider safety policy."""
+    tag = 'content-filtered'
+ModelError.ContentFiltered = _ModelError_ContentFiltered  # type: ignore[attr-defined]
 
-    class Transient(_WitVariantCase):
-        """Transient network or transport failure. Retry may succeed."""
-        tag = 'transient'
+class _ModelError_Transient(_WitVariantCase, ModelError):
+    """Transient network or transport failure. Retry may succeed."""
+    tag = 'transient'
+ModelError.Transient = _ModelError_Transient  # type: ignore[attr-defined]
 
-    class Internal(_WitVariantCase):
-        """Catch-all for internal failures."""
-        tag = 'internal'
+class _ModelError_Internal(_WitVariantCase, ModelError):
+    """Catch-all for internal failures."""
+    tag = 'internal'
+ModelError.Internal = _ModelError_Internal  # type: ignore[attr-defined]
 
-    _CASES: dict[str, type] = {
-        'unknown-provider': UnknownProvider,
-        'invalid-request': InvalidRequest,
-        'unauthorized': Unauthorized,
-        'throttled': Throttled,
-        'server-error': ServerError,
-        'context-window-exceeded': ContextWindowExceeded,
-        'content-filtered': ContentFiltered,
-        'transient': Transient,
-        'internal': Internal,
-    }
+ModelError._CASES = {  # type: ignore[attr-defined]
+    'unknown-provider': ModelError.UnknownProvider,
+    'invalid-request': ModelError.InvalidRequest,
+    'unauthorized': ModelError.Unauthorized,
+    'throttled': ModelError.Throttled,
+    'server-error': ModelError.ServerError,
+    'context-window-exceeded': ModelError.ContextWindowExceeded,
+    'content-filtered': ModelError.ContentFiltered,
+    'transient': ModelError.Transient,
+    'internal': ModelError.Internal,
+}
 
-    @staticmethod
-    def lift(raw: _WitVariant) -> ModelError:
-        cls = ModelError._CASES.get(raw.tag)
-        if cls is None:
-            raise ValueError(f'unknown ModelError arm: {raw.tag!r}')
-        return cls(raw.payload)
+
+def _ModelError_lift(raw: _WitVariant) -> ModelError:
+    cls = ModelError._CASES.get(raw.tag)  # type: ignore[attr-defined]
+    if cls is None:
+        raise ValueError(f'unknown ModelError arm: {raw.tag!r}')
+    return cls(raw.payload)
+ModelError.lift = staticmethod(_ModelError_lift)  # type: ignore[attr-defined]

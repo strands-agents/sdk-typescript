@@ -5,7 +5,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Optional, Union
+from typing import Any, ClassVar, Optional, TYPE_CHECKING, Union
 
 from wasmtime.component import Variant as _WitVariant
 from wasmtime.component import VariantCase as _WitVariantCase
@@ -42,31 +42,42 @@ class CallToolArgs:
 class ToolChoice:
     """Policy controlling whether and how the model calls tools on the next
 generation step."""
+    if TYPE_CHECKING:
+        Auto: ClassVar[type["_ToolChoice_Auto"]]
+        Any: ClassVar[type["_ToolChoice_Any"]]
+        Named: ClassVar[type["_ToolChoice_Named"]]
+        _CASES: ClassVar[dict[str, type]]
+        @staticmethod
+        def lift(raw: _WitVariant) -> "ToolChoice": ...
 
-    class Auto(_WitVariantCase):
-        """Model decides whether to call a tool."""
-        tag = 'auto'
+class _ToolChoice_Auto(_WitVariantCase, ToolChoice):
+    """Model decides whether to call a tool."""
+    tag = 'auto'
+ToolChoice.Auto = _ToolChoice_Auto  # type: ignore[attr-defined]
 
-    class Any(_WitVariantCase):
-        """Model must call at least one tool."""
-        tag = 'any'
+class _ToolChoice_Any(_WitVariantCase, ToolChoice):
+    """Model must call at least one tool."""
+    tag = 'any'
+ToolChoice.Any = _ToolChoice_Any  # type: ignore[attr-defined]
 
-    class Named(_WitVariantCase):
-        """Model must call the tool with this name."""
-        tag = 'named'
+class _ToolChoice_Named(_WitVariantCase, ToolChoice):
+    """Model must call the tool with this name."""
+    tag = 'named'
+ToolChoice.Named = _ToolChoice_Named  # type: ignore[attr-defined]
 
-    _CASES: dict[str, type] = {
-        'auto': Auto,
-        'any': Any,
-        'named': Named,
-    }
+ToolChoice._CASES = {  # type: ignore[attr-defined]
+    'auto': ToolChoice.Auto,
+    'any': ToolChoice.Any,
+    'named': ToolChoice.Named,
+}
 
-    @staticmethod
-    def lift(raw: _WitVariant) -> ToolChoice:
-        cls = ToolChoice._CASES.get(raw.tag)
-        if cls is None:
-            raise ValueError(f'unknown ToolChoice arm: {raw.tag!r}')
-        return cls(raw.payload)
+
+def _ToolChoice_lift(raw: _WitVariant) -> ToolChoice:
+    cls = ToolChoice._CASES.get(raw.tag)  # type: ignore[attr-defined]
+    if cls is None:
+        raise ValueError(f'unknown ToolChoice arm: {raw.tag!r}')
+    return cls(raw.payload)
+ToolChoice.lift = staticmethod(_ToolChoice_lift)  # type: ignore[attr-defined]
 
 class ToolEventStream:
     """Pull-based stream of tool events. Sync-WIT placeholder for
@@ -85,46 +96,63 @@ class ToolEventStream:
 
 class ToolError:
     """Why a tool call failed."""
+    if TYPE_CHECKING:
+        Unknown: ClassVar[type["_ToolError_Unknown"]]
+        InvalidInput: ClassVar[type["_ToolError_InvalidInput"]]
+        ExecutionFailed: ClassVar[type["_ToolError_ExecutionFailed"]]
+        TimedOut: ClassVar[type["_ToolError_TimedOut"]]
+        Cancelled: ClassVar[type["_ToolError_Cancelled"]]
+        Internal: ClassVar[type["_ToolError_Internal"]]
+        _CASES: ClassVar[dict[str, type]]
+        @staticmethod
+        def lift(raw: _WitVariant) -> "ToolError": ...
 
-    class Unknown(_WitVariantCase):
-        """No tool registered under the given name."""
-        tag = 'unknown'
+class _ToolError_Unknown(_WitVariantCase, ToolError):
+    """No tool registered under the given name."""
+    tag = 'unknown'
+ToolError.Unknown = _ToolError_Unknown  # type: ignore[attr-defined]
 
-    class InvalidInput(_WitVariantCase):
-        """Tool input didn't match the declared input schema."""
-        tag = 'invalid-input'
+class _ToolError_InvalidInput(_WitVariantCase, ToolError):
+    """Tool input didn't match the declared input schema."""
+    tag = 'invalid-input'
+ToolError.InvalidInput = _ToolError_InvalidInput  # type: ignore[attr-defined]
 
-    class ExecutionFailed(_WitVariantCase):
-        """Tool ran but returned an error result."""
-        tag = 'execution-failed'
+class _ToolError_ExecutionFailed(_WitVariantCase, ToolError):
+    """Tool ran but returned an error result."""
+    tag = 'execution-failed'
+ToolError.ExecutionFailed = _ToolError_ExecutionFailed  # type: ignore[attr-defined]
 
-    class TimedOut(_WitVariantCase):
-        """Tool exceeded its time budget."""
-        tag = 'timed-out'
+class _ToolError_TimedOut(_WitVariantCase, ToolError):
+    """Tool exceeded its time budget."""
+    tag = 'timed-out'
+ToolError.TimedOut = _ToolError_TimedOut  # type: ignore[attr-defined]
 
-    class Cancelled(_WitVariantCase):
-        """Tool was cancelled before completion."""
-        tag = 'cancelled'
+class _ToolError_Cancelled(_WitVariantCase, ToolError):
+    """Tool was cancelled before completion."""
+    tag = 'cancelled'
+ToolError.Cancelled = _ToolError_Cancelled  # type: ignore[attr-defined]
 
-    class Internal(_WitVariantCase):
-        """Catch-all for internal failures."""
-        tag = 'internal'
+class _ToolError_Internal(_WitVariantCase, ToolError):
+    """Catch-all for internal failures."""
+    tag = 'internal'
+ToolError.Internal = _ToolError_Internal  # type: ignore[attr-defined]
 
-    _CASES: dict[str, type] = {
-        'unknown': Unknown,
-        'invalid-input': InvalidInput,
-        'execution-failed': ExecutionFailed,
-        'timed-out': TimedOut,
-        'cancelled': Cancelled,
-        'internal': Internal,
-    }
+ToolError._CASES = {  # type: ignore[attr-defined]
+    'unknown': ToolError.Unknown,
+    'invalid-input': ToolError.InvalidInput,
+    'execution-failed': ToolError.ExecutionFailed,
+    'timed-out': ToolError.TimedOut,
+    'cancelled': ToolError.Cancelled,
+    'internal': ToolError.Internal,
+}
 
-    @staticmethod
-    def lift(raw: _WitVariant) -> ToolError:
-        cls = ToolError._CASES.get(raw.tag)
-        if cls is None:
-            raise ValueError(f'unknown ToolError arm: {raw.tag!r}')
-        return cls(raw.payload)
+
+def _ToolError_lift(raw: _WitVariant) -> ToolError:
+    cls = ToolError._CASES.get(raw.tag)  # type: ignore[attr-defined]
+    if cls is None:
+        raise ValueError(f'unknown ToolError arm: {raw.tag!r}')
+    return cls(raw.payload)
+ToolError.lift = staticmethod(_ToolError_lift)  # type: ignore[attr-defined]
 
 ToolStreamEvent = str | list[ToolResultContent] | ToolError
 """Incremental event emitted by a streaming tool while running."""

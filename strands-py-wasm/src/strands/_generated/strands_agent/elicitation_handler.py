@@ -5,7 +5,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Optional, Union
+from typing import Any, ClassVar, Optional, TYPE_CHECKING, Union
 
 from wasmtime.component import Variant as _WitVariant
 from wasmtime.component import VariantCase as _WitVariantCase
@@ -41,28 +41,39 @@ class ElicitResponse:
 
 class ElicitationError:
     """Why an elicitation call failed."""
+    if TYPE_CHECKING:
+        UnknownClient: ClassVar[type["_ElicitationError_UnknownClient"]]
+        HandlerFailed: ClassVar[type["_ElicitationError_HandlerFailed"]]
+        TimedOut: ClassVar[type["_ElicitationError_TimedOut"]]
+        _CASES: ClassVar[dict[str, type]]
+        @staticmethod
+        def lift(raw: _WitVariant) -> "ElicitationError": ...
 
-    class UnknownClient(_WitVariantCase):
-        """No handler registered for the given `client-id`."""
-        tag = 'unknown-client'
+class _ElicitationError_UnknownClient(_WitVariantCase, ElicitationError):
+    """No handler registered for the given `client-id`."""
+    tag = 'unknown-client'
+ElicitationError.UnknownClient = _ElicitationError_UnknownClient  # type: ignore[attr-defined]
 
-    class HandlerFailed(_WitVariantCase):
-        """Handler raised an exception."""
-        tag = 'handler-failed'
+class _ElicitationError_HandlerFailed(_WitVariantCase, ElicitationError):
+    """Handler raised an exception."""
+    tag = 'handler-failed'
+ElicitationError.HandlerFailed = _ElicitationError_HandlerFailed  # type: ignore[attr-defined]
 
-    class TimedOut(_WitVariantCase):
-        """Request timed out waiting for a human response."""
-        tag = 'timed-out'
+class _ElicitationError_TimedOut(_WitVariantCase, ElicitationError):
+    """Request timed out waiting for a human response."""
+    tag = 'timed-out'
+ElicitationError.TimedOut = _ElicitationError_TimedOut  # type: ignore[attr-defined]
 
-    _CASES: dict[str, type] = {
-        'unknown-client': UnknownClient,
-        'handler-failed': HandlerFailed,
-        'timed-out': TimedOut,
-    }
+ElicitationError._CASES = {  # type: ignore[attr-defined]
+    'unknown-client': ElicitationError.UnknownClient,
+    'handler-failed': ElicitationError.HandlerFailed,
+    'timed-out': ElicitationError.TimedOut,
+}
 
-    @staticmethod
-    def lift(raw: _WitVariant) -> ElicitationError:
-        cls = ElicitationError._CASES.get(raw.tag)
-        if cls is None:
-            raise ValueError(f'unknown ElicitationError arm: {raw.tag!r}')
-        return cls(raw.payload)
+
+def _ElicitationError_lift(raw: _WitVariant) -> ElicitationError:
+    cls = ElicitationError._CASES.get(raw.tag)  # type: ignore[attr-defined]
+    if cls is None:
+        raise ValueError(f'unknown ElicitationError arm: {raw.tag!r}')
+    return cls(raw.payload)
+ElicitationError.lift = staticmethod(_ElicitationError_lift)  # type: ignore[attr-defined]

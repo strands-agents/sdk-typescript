@@ -5,7 +5,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Optional, Union
+from typing import Any, ClassVar, Optional, TYPE_CHECKING, Union
 
 from wasmtime.component import Variant as _WitVariant
 from wasmtime.component import VariantCase as _WitVariantCase
@@ -15,26 +15,35 @@ from .multi_agent import NodeResult
 
 class EdgeHandlerError:
     """Why an edge evaluation failed."""
+    if TYPE_CHECKING:
+        Unknown: ClassVar[type["_EdgeHandlerError_Unknown"]]
+        Failed: ClassVar[type["_EdgeHandlerError_Failed"]]
+        _CASES: ClassVar[dict[str, type]]
+        @staticmethod
+        def lift(raw: _WitVariant) -> "EdgeHandlerError": ...
 
-    class Unknown(_WitVariantCase):
-        """No handler registered for the given id."""
-        tag = 'unknown'
+class _EdgeHandlerError_Unknown(_WitVariantCase, EdgeHandlerError):
+    """No handler registered for the given id."""
+    tag = 'unknown'
+EdgeHandlerError.Unknown = _EdgeHandlerError_Unknown  # type: ignore[attr-defined]
 
-    class Failed(_WitVariantCase):
-        """Handler raised an exception."""
-        tag = 'failed'
+class _EdgeHandlerError_Failed(_WitVariantCase, EdgeHandlerError):
+    """Handler raised an exception."""
+    tag = 'failed'
+EdgeHandlerError.Failed = _EdgeHandlerError_Failed  # type: ignore[attr-defined]
 
-    _CASES: dict[str, type] = {
-        'unknown': Unknown,
-        'failed': Failed,
-    }
+EdgeHandlerError._CASES = {  # type: ignore[attr-defined]
+    'unknown': EdgeHandlerError.Unknown,
+    'failed': EdgeHandlerError.Failed,
+}
 
-    @staticmethod
-    def lift(raw: _WitVariant) -> EdgeHandlerError:
-        cls = EdgeHandlerError._CASES.get(raw.tag)
-        if cls is None:
-            raise ValueError(f'unknown EdgeHandlerError arm: {raw.tag!r}')
-        return cls(raw.payload)
+
+def _EdgeHandlerError_lift(raw: _WitVariant) -> EdgeHandlerError:
+    cls = EdgeHandlerError._CASES.get(raw.tag)  # type: ignore[attr-defined]
+    if cls is None:
+        raise ValueError(f'unknown EdgeHandlerError arm: {raw.tag!r}')
+    return cls(raw.payload)
+EdgeHandlerError.lift = staticmethod(_EdgeHandlerError_lift)  # type: ignore[attr-defined]
 
 @dataclass(kw_only=True)
 class HandlerState:

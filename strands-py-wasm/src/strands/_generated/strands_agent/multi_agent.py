@@ -5,7 +5,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Optional, Union
+from typing import Any, ClassVar, Optional, TYPE_CHECKING, Union
 
 from wasmtime.component import Variant as _WitVariant
 from wasmtime.component import VariantCase as _WitVariantCase
@@ -76,26 +76,35 @@ class MultiAgentNode:
 
 class NodeConfig:
     """Any node a graph or swarm can execute."""
+    if TYPE_CHECKING:
+        Agent: ClassVar[type["_NodeConfig_Agent"]]
+        MultiAgent: ClassVar[type["_NodeConfig_MultiAgent"]]
+        _CASES: ClassVar[dict[str, type]]
+        @staticmethod
+        def lift(raw: _WitVariant) -> "NodeConfig": ...
 
-    class Agent(_WitVariantCase):
-        """Wraps a single agent."""
-        tag = 'agent'
+class _NodeConfig_Agent(_WitVariantCase, NodeConfig):
+    """Wraps a single agent."""
+    tag = 'agent'
+NodeConfig.Agent = _NodeConfig_Agent  # type: ignore[attr-defined]
 
-    class MultiAgent(_WitVariantCase):
-        """Wraps a nested orchestrator."""
-        tag = 'multi-agent'
+class _NodeConfig_MultiAgent(_WitVariantCase, NodeConfig):
+    """Wraps a nested orchestrator."""
+    tag = 'multi-agent'
+NodeConfig.MultiAgent = _NodeConfig_MultiAgent  # type: ignore[attr-defined]
 
-    _CASES: dict[str, type] = {
-        'agent': Agent,
-        'multi-agent': MultiAgent,
-    }
+NodeConfig._CASES = {  # type: ignore[attr-defined]
+    'agent': NodeConfig.Agent,
+    'multi-agent': NodeConfig.MultiAgent,
+}
 
-    @staticmethod
-    def lift(raw: _WitVariant) -> NodeConfig:
-        cls = NodeConfig._CASES.get(raw.tag)
-        if cls is None:
-            raise ValueError(f'unknown NodeConfig arm: {raw.tag!r}')
-        return cls(raw.payload)
+
+def _NodeConfig_lift(raw: _WitVariant) -> NodeConfig:
+    cls = NodeConfig._CASES.get(raw.tag)  # type: ignore[attr-defined]
+    if cls is None:
+        raise ValueError(f'unknown NodeConfig arm: {raw.tag!r}')
+    return cls(raw.payload)
+NodeConfig.lift = staticmethod(_NodeConfig_lift)  # type: ignore[attr-defined]
 
 @dataclass(kw_only=True)
 class EdgeHandler:
@@ -137,46 +146,63 @@ class SwarmConfig:
 
 class NodeError:
     """Why a node or run ended in `failed` status."""
+    if TYPE_CHECKING:
+        Execution: ClassVar[type["_NodeError_Execution"]]
+        Timeout: ClassVar[type["_NodeError_Timeout"]]
+        LimitExceeded: ClassVar[type["_NodeError_LimitExceeded"]]
+        EdgeHandler: ClassVar[type["_NodeError_EdgeHandler"]]
+        InvalidConfig: ClassVar[type["_NodeError_InvalidConfig"]]
+        Internal: ClassVar[type["_NodeError_Internal"]]
+        _CASES: ClassVar[dict[str, type]]
+        @staticmethod
+        def lift(raw: _WitVariant) -> "NodeError": ...
 
-    class Execution(_WitVariantCase):
-        """An underlying agent or nested orchestrator failed."""
-        tag = 'execution'
+class _NodeError_Execution(_WitVariantCase, NodeError):
+    """An underlying agent or nested orchestrator failed."""
+    tag = 'execution'
+NodeError.Execution = _NodeError_Execution  # type: ignore[attr-defined]
 
-    class Timeout(_WitVariantCase):
-        """Wall-clock ceiling was exceeded."""
-        tag = 'timeout'
+class _NodeError_Timeout(_WitVariantCase, NodeError):
+    """Wall-clock ceiling was exceeded."""
+    tag = 'timeout'
+NodeError.Timeout = _NodeError_Timeout  # type: ignore[attr-defined]
 
-    class LimitExceeded(_WitVariantCase):
-        """A declared runtime limit (max-steps, max-concurrency) was hit."""
-        tag = 'limit-exceeded'
+class _NodeError_LimitExceeded(_WitVariantCase, NodeError):
+    """A declared runtime limit (max-steps, max-concurrency) was hit."""
+    tag = 'limit-exceeded'
+NodeError.LimitExceeded = _NodeError_LimitExceeded  # type: ignore[attr-defined]
 
-    class EdgeHandler(_WitVariantCase):
-        """Edge handler rejected the traversal with an error."""
-        tag = 'edge-handler'
+class _NodeError_EdgeHandler(_WitVariantCase, NodeError):
+    """Edge handler rejected the traversal with an error."""
+    tag = 'edge-handler'
+NodeError.EdgeHandler = _NodeError_EdgeHandler  # type: ignore[attr-defined]
 
-    class InvalidConfig(_WitVariantCase):
-        """Invalid configuration detected at run time."""
-        tag = 'invalid-config'
+class _NodeError_InvalidConfig(_WitVariantCase, NodeError):
+    """Invalid configuration detected at run time."""
+    tag = 'invalid-config'
+NodeError.InvalidConfig = _NodeError_InvalidConfig  # type: ignore[attr-defined]
 
-    class Internal(_WitVariantCase):
-        """Catch-all for internal failures."""
-        tag = 'internal'
+class _NodeError_Internal(_WitVariantCase, NodeError):
+    """Catch-all for internal failures."""
+    tag = 'internal'
+NodeError.Internal = _NodeError_Internal  # type: ignore[attr-defined]
 
-    _CASES: dict[str, type] = {
-        'execution': Execution,
-        'timeout': Timeout,
-        'limit-exceeded': LimitExceeded,
-        'edge-handler': EdgeHandler,
-        'invalid-config': InvalidConfig,
-        'internal': Internal,
-    }
+NodeError._CASES = {  # type: ignore[attr-defined]
+    'execution': NodeError.Execution,
+    'timeout': NodeError.Timeout,
+    'limit-exceeded': NodeError.LimitExceeded,
+    'edge-handler': NodeError.EdgeHandler,
+    'invalid-config': NodeError.InvalidConfig,
+    'internal': NodeError.Internal,
+}
 
-    @staticmethod
-    def lift(raw: _WitVariant) -> NodeError:
-        cls = NodeError._CASES.get(raw.tag)
-        if cls is None:
-            raise ValueError(f'unknown NodeError arm: {raw.tag!r}')
-        return cls(raw.payload)
+
+def _NodeError_lift(raw: _WitVariant) -> NodeError:
+    cls = NodeError._CASES.get(raw.tag)  # type: ignore[attr-defined]
+    if cls is None:
+        raise ValueError(f'unknown NodeError arm: {raw.tag!r}')
+    return cls(raw.payload)
+NodeError.lift = staticmethod(_NodeError_lift)  # type: ignore[attr-defined]
 
 @dataclass(kw_only=True)
 class NodeResult:
@@ -232,38 +258,53 @@ class HandoffEvent:
 
 class MultiAgentStreamEvent:
     """Events emitted while streaming a multi-agent run."""
+    if TYPE_CHECKING:
+        NodeStart: ClassVar[type["_MultiAgentStreamEvent_NodeStart"]]
+        Nested: ClassVar[type["_MultiAgentStreamEvent_Nested"]]
+        NodeStop: ClassVar[type["_MultiAgentStreamEvent_NodeStop"]]
+        Handoff: ClassVar[type["_MultiAgentStreamEvent_Handoff"]]
+        RunComplete: ClassVar[type["_MultiAgentStreamEvent_RunComplete"]]
+        _CASES: ClassVar[dict[str, type]]
+        @staticmethod
+        def lift(raw: _WitVariant) -> "MultiAgentStreamEvent": ...
 
-    class NodeStart(_WitVariantCase):
-        """A node began executing."""
-        tag = 'node-start'
+class _MultiAgentStreamEvent_NodeStart(_WitVariantCase, MultiAgentStreamEvent):
+    """A node began executing."""
+    tag = 'node-start'
+MultiAgentStreamEvent.NodeStart = _MultiAgentStreamEvent_NodeStart  # type: ignore[attr-defined]
 
-    class Nested(_WitVariantCase):
-        """A nested stream event from a running node."""
-        tag = 'nested'
+class _MultiAgentStreamEvent_Nested(_WitVariantCase, MultiAgentStreamEvent):
+    """A nested stream event from a running node."""
+    tag = 'nested'
+MultiAgentStreamEvent.Nested = _MultiAgentStreamEvent_Nested  # type: ignore[attr-defined]
 
-    class NodeStop(_WitVariantCase):
-        """A node finished executing."""
-        tag = 'node-stop'
+class _MultiAgentStreamEvent_NodeStop(_WitVariantCase, MultiAgentStreamEvent):
+    """A node finished executing."""
+    tag = 'node-stop'
+MultiAgentStreamEvent.NodeStop = _MultiAgentStreamEvent_NodeStop  # type: ignore[attr-defined]
 
-    class Handoff(_WitVariantCase):
-        """A handoff happened between nodes."""
-        tag = 'handoff'
+class _MultiAgentStreamEvent_Handoff(_WitVariantCase, MultiAgentStreamEvent):
+    """A handoff happened between nodes."""
+    tag = 'handoff'
+MultiAgentStreamEvent.Handoff = _MultiAgentStreamEvent_Handoff  # type: ignore[attr-defined]
 
-    class RunComplete(_WitVariantCase):
-        """Terminal result for the run."""
-        tag = 'run-complete'
+class _MultiAgentStreamEvent_RunComplete(_WitVariantCase, MultiAgentStreamEvent):
+    """Terminal result for the run."""
+    tag = 'run-complete'
+MultiAgentStreamEvent.RunComplete = _MultiAgentStreamEvent_RunComplete  # type: ignore[attr-defined]
 
-    _CASES: dict[str, type] = {
-        'node-start': NodeStart,
-        'nested': Nested,
-        'node-stop': NodeStop,
-        'handoff': Handoff,
-        'run-complete': RunComplete,
-    }
+MultiAgentStreamEvent._CASES = {  # type: ignore[attr-defined]
+    'node-start': MultiAgentStreamEvent.NodeStart,
+    'nested': MultiAgentStreamEvent.Nested,
+    'node-stop': MultiAgentStreamEvent.NodeStop,
+    'handoff': MultiAgentStreamEvent.Handoff,
+    'run-complete': MultiAgentStreamEvent.RunComplete,
+}
 
-    @staticmethod
-    def lift(raw: _WitVariant) -> MultiAgentStreamEvent:
-        cls = MultiAgentStreamEvent._CASES.get(raw.tag)
-        if cls is None:
-            raise ValueError(f'unknown MultiAgentStreamEvent arm: {raw.tag!r}')
-        return cls(raw.payload)
+
+def _MultiAgentStreamEvent_lift(raw: _WitVariant) -> MultiAgentStreamEvent:
+    cls = MultiAgentStreamEvent._CASES.get(raw.tag)  # type: ignore[attr-defined]
+    if cls is None:
+        raise ValueError(f'unknown MultiAgentStreamEvent arm: {raw.tag!r}')
+    return cls(raw.payload)
+MultiAgentStreamEvent.lift = staticmethod(_MultiAgentStreamEvent_lift)  # type: ignore[attr-defined]

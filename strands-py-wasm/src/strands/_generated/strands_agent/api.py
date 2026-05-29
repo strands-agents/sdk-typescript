@@ -5,7 +5,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Optional, Union
+from typing import Any, ClassVar, Optional, TYPE_CHECKING, Union
 
 from wasmtime.component import Variant as _WitVariant
 from wasmtime.component import VariantCase as _WitVariantCase
@@ -100,41 +100,56 @@ class RespondArgs:
 
 class AgentError:
     """Why an agent-resource call failed."""
+    if TYPE_CHECKING:
+        NoSessionConfigured: ClassVar[type["_AgentError_NoSessionConfigured"]]
+        Storage: ClassVar[type["_AgentError_Storage"]]
+        InvalidInput: ClassVar[type["_AgentError_InvalidInput"]]
+        UnknownInterrupt: ClassVar[type["_AgentError_UnknownInterrupt"]]
+        Internal: ClassVar[type["_AgentError_Internal"]]
+        _CASES: ClassVar[dict[str, type]]
+        @staticmethod
+        def lift(raw: _WitVariant) -> "AgentError": ...
 
-    class NoSessionConfigured(_WitVariantCase):
-        """The agent was constructed without a session config."""
-        tag = 'no-session-configured'
+class _AgentError_NoSessionConfigured(_WitVariantCase, AgentError):
+    """The agent was constructed without a session config."""
+    tag = 'no-session-configured'
+AgentError.NoSessionConfigured = _AgentError_NoSessionConfigured  # type: ignore[attr-defined]
 
-    class Storage(_WitVariantCase):
-        """The storage backend rejected the operation."""
-        tag = 'storage'
+class _AgentError_Storage(_WitVariantCase, AgentError):
+    """The storage backend rejected the operation."""
+    tag = 'storage'
+AgentError.Storage = _AgentError_Storage  # type: ignore[attr-defined]
 
-    class InvalidInput(_WitVariantCase):
-        """Supplied payload did not match the expected shape."""
-        tag = 'invalid-input'
+class _AgentError_InvalidInput(_WitVariantCase, AgentError):
+    """Supplied payload did not match the expected shape."""
+    tag = 'invalid-input'
+AgentError.InvalidInput = _AgentError_InvalidInput  # type: ignore[attr-defined]
 
-    class UnknownInterrupt(_WitVariantCase):
-        """Supplied `interrupt-id` does not match any live interrupt."""
-        tag = 'unknown-interrupt'
+class _AgentError_UnknownInterrupt(_WitVariantCase, AgentError):
+    """Supplied `interrupt-id` does not match any live interrupt."""
+    tag = 'unknown-interrupt'
+AgentError.UnknownInterrupt = _AgentError_UnknownInterrupt  # type: ignore[attr-defined]
 
-    class Internal(_WitVariantCase):
-        """Catch-all for internal failures."""
-        tag = 'internal'
+class _AgentError_Internal(_WitVariantCase, AgentError):
+    """Catch-all for internal failures."""
+    tag = 'internal'
+AgentError.Internal = _AgentError_Internal  # type: ignore[attr-defined]
 
-    _CASES: dict[str, type] = {
-        'no-session-configured': NoSessionConfigured,
-        'storage': Storage,
-        'invalid-input': InvalidInput,
-        'unknown-interrupt': UnknownInterrupt,
-        'internal': Internal,
-    }
+AgentError._CASES = {  # type: ignore[attr-defined]
+    'no-session-configured': AgentError.NoSessionConfigured,
+    'storage': AgentError.Storage,
+    'invalid-input': AgentError.InvalidInput,
+    'unknown-interrupt': AgentError.UnknownInterrupt,
+    'internal': AgentError.Internal,
+}
 
-    @staticmethod
-    def lift(raw: _WitVariant) -> AgentError:
-        cls = AgentError._CASES.get(raw.tag)
-        if cls is None:
-            raise ValueError(f'unknown AgentError arm: {raw.tag!r}')
-        return cls(raw.payload)
+
+def _AgentError_lift(raw: _WitVariant) -> AgentError:
+    cls = AgentError._CASES.get(raw.tag)  # type: ignore[attr-defined]
+    if cls is None:
+        raise ValueError(f'unknown AgentError arm: {raw.tag!r}')
+    return cls(raw.payload)
+AgentError.lift = staticmethod(_AgentError_lift)  # type: ignore[attr-defined]
 
 class Agent:
     """An agent instance. Persistent across `generate` calls."""

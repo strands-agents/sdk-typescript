@@ -5,7 +5,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Optional, Union
+from typing import Any, ClassVar, Optional, TYPE_CHECKING, Union
 
 from wasmtime.component import Variant as _WitVariant
 from wasmtime.component import VariantCase as _WitVariantCase
@@ -38,36 +38,49 @@ class NotebookTool:
 
 class VendedTool:
     """Built-in tools."""
+    if TYPE_CHECKING:
+        Bash: ClassVar[type["_VendedTool_Bash"]]
+        FileEditor: ClassVar[type["_VendedTool_FileEditor"]]
+        HttpRequest: ClassVar[type["_VendedTool_HttpRequest"]]
+        Notebook: ClassVar[type["_VendedTool_Notebook"]]
+        _CASES: ClassVar[dict[str, type]]
+        @staticmethod
+        def lift(raw: _WitVariant) -> "VendedTool": ...
 
-    class Bash(_WitVariantCase):
-        """Run shell commands in a persistent bash session."""
-        tag = 'bash'
+class _VendedTool_Bash(_WitVariantCase, VendedTool):
+    """Run shell commands in a persistent bash session."""
+    tag = 'bash'
+VendedTool.Bash = _VendedTool_Bash  # type: ignore[attr-defined]
 
-    class FileEditor(_WitVariantCase):
-        """Create, view, and edit files on disk."""
-        tag = 'file-editor'
+class _VendedTool_FileEditor(_WitVariantCase, VendedTool):
+    """Create, view, and edit files on disk."""
+    tag = 'file-editor'
+VendedTool.FileEditor = _VendedTool_FileEditor  # type: ignore[attr-defined]
 
-    class HttpRequest(_WitVariantCase):
-        """Make HTTP requests."""
-        tag = 'http-request'
+class _VendedTool_HttpRequest(_WitVariantCase, VendedTool):
+    """Make HTTP requests."""
+    tag = 'http-request'
+VendedTool.HttpRequest = _VendedTool_HttpRequest  # type: ignore[attr-defined]
 
-    class Notebook(_WitVariantCase):
-        """Read and execute Jupyter notebook cells."""
-        tag = 'notebook'
+class _VendedTool_Notebook(_WitVariantCase, VendedTool):
+    """Read and execute Jupyter notebook cells."""
+    tag = 'notebook'
+VendedTool.Notebook = _VendedTool_Notebook  # type: ignore[attr-defined]
 
-    _CASES: dict[str, type] = {
-        'bash': Bash,
-        'file-editor': FileEditor,
-        'http-request': HttpRequest,
-        'notebook': Notebook,
-    }
+VendedTool._CASES = {  # type: ignore[attr-defined]
+    'bash': VendedTool.Bash,
+    'file-editor': VendedTool.FileEditor,
+    'http-request': VendedTool.HttpRequest,
+    'notebook': VendedTool.Notebook,
+}
 
-    @staticmethod
-    def lift(raw: _WitVariant) -> VendedTool:
-        cls = VendedTool._CASES.get(raw.tag)
-        if cls is None:
-            raise ValueError(f'unknown VendedTool arm: {raw.tag!r}')
-        return cls(raw.payload)
+
+def _VendedTool_lift(raw: _WitVariant) -> VendedTool:
+    cls = VendedTool._CASES.get(raw.tag)  # type: ignore[attr-defined]
+    if cls is None:
+        raise ValueError(f'unknown VendedTool arm: {raw.tag!r}')
+    return cls(raw.payload)
+VendedTool.lift = staticmethod(_VendedTool_lift)  # type: ignore[attr-defined]
 
 @dataclass(kw_only=True)
 class SkillSource:
@@ -94,23 +107,32 @@ class ContextOffloader:
 
 class VendedPlugin:
     """Built-in plugins."""
+    if TYPE_CHECKING:
+        Skills: ClassVar[type["_VendedPlugin_Skills"]]
+        ContextOffloader: ClassVar[type["_VendedPlugin_ContextOffloader"]]
+        _CASES: ClassVar[dict[str, type]]
+        @staticmethod
+        def lift(raw: _WitVariant) -> "VendedPlugin": ...
 
-    class Skills(_WitVariantCase):
-        """Load and activate Anthropic-style skills from disk."""
-        tag = 'skills'
+class _VendedPlugin_Skills(_WitVariantCase, VendedPlugin):
+    """Load and activate Anthropic-style skills from disk."""
+    tag = 'skills'
+VendedPlugin.Skills = _VendedPlugin_Skills  # type: ignore[attr-defined]
 
-    class ContextOffloader(_WitVariantCase):
-        """Offload large tool results to external storage."""
-        tag = 'context-offloader'
+class _VendedPlugin_ContextOffloader(_WitVariantCase, VendedPlugin):
+    """Offload large tool results to external storage."""
+    tag = 'context-offloader'
+VendedPlugin.ContextOffloader = _VendedPlugin_ContextOffloader  # type: ignore[attr-defined]
 
-    _CASES: dict[str, type] = {
-        'skills': Skills,
-        'context-offloader': ContextOffloader,
-    }
+VendedPlugin._CASES = {  # type: ignore[attr-defined]
+    'skills': VendedPlugin.Skills,
+    'context-offloader': VendedPlugin.ContextOffloader,
+}
 
-    @staticmethod
-    def lift(raw: _WitVariant) -> VendedPlugin:
-        cls = VendedPlugin._CASES.get(raw.tag)
-        if cls is None:
-            raise ValueError(f'unknown VendedPlugin arm: {raw.tag!r}')
-        return cls(raw.payload)
+
+def _VendedPlugin_lift(raw: _WitVariant) -> VendedPlugin:
+    cls = VendedPlugin._CASES.get(raw.tag)  # type: ignore[attr-defined]
+    if cls is None:
+        raise ValueError(f'unknown VendedPlugin arm: {raw.tag!r}')
+    return cls(raw.payload)
+VendedPlugin.lift = staticmethod(_VendedPlugin_lift)  # type: ignore[attr-defined]

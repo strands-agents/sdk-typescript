@@ -5,7 +5,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Optional, Union
+from typing import Any, ClassVar, Optional, TYPE_CHECKING, Union
 
 from wasmtime.component import Variant as _WitVariant
 from wasmtime.component import VariantCase as _WitVariantCase
@@ -258,186 +258,258 @@ class AgentResultData:
 
 class StreamError:
     """Why the agent loop surfaced an error mid-stream."""
+    if TYPE_CHECKING:
+        Model: ClassVar[type["_StreamError_Model"]]
+        Tool: ClassVar[type["_StreamError_Tool"]]
+        ContextWindowExceeded: ClassVar[type["_StreamError_ContextWindowExceeded"]]
+        MaxTokensReached: ClassVar[type["_StreamError_MaxTokensReached"]]
+        StructuredOutputUnavailable: ClassVar[type["_StreamError_StructuredOutputUnavailable"]]
+        Internal: ClassVar[type["_StreamError_Internal"]]
+        _CASES: ClassVar[dict[str, type]]
+        @staticmethod
+        def lift(raw: _WitVariant) -> "StreamError": ...
 
-    class Model(_WitVariantCase):
-        """A model call failed."""
-        tag = 'model'
+class _StreamError_Model(_WitVariantCase, StreamError):
+    """A model call failed."""
+    tag = 'model'
+StreamError.Model = _StreamError_Model  # type: ignore[attr-defined]
 
-    class Tool(_WitVariantCase):
-        """A tool call failed."""
-        tag = 'tool'
+class _StreamError_Tool(_WitVariantCase, StreamError):
+    """A tool call failed."""
+    tag = 'tool'
+StreamError.Tool = _StreamError_Tool  # type: ignore[attr-defined]
 
-    class ContextWindowExceeded(_WitVariantCase):
-        """Input exceeded the model's context window and no conversation
+class _StreamError_ContextWindowExceeded(_WitVariantCase, StreamError):
+    """Input exceeded the model's context window and no conversation
 manager could recover."""
-        tag = 'context-window-exceeded'
+    tag = 'context-window-exceeded'
+StreamError.ContextWindowExceeded = _StreamError_ContextWindowExceeded  # type: ignore[attr-defined]
 
-    class MaxTokensReached(_WitVariantCase):
-        """Exceeded the model's max-tokens budget mid-response."""
-        tag = 'max-tokens-reached'
+class _StreamError_MaxTokensReached(_WitVariantCase, StreamError):
+    """Exceeded the model's max-tokens budget mid-response."""
+    tag = 'max-tokens-reached'
+StreamError.MaxTokensReached = _StreamError_MaxTokensReached  # type: ignore[attr-defined]
 
-    class StructuredOutputUnavailable(_WitVariantCase):
-        """Structured output was requested but the model never called the
+class _StreamError_StructuredOutputUnavailable(_WitVariantCase, StreamError):
+    """Structured output was requested but the model never called the
 tool, even after being forced."""
-        tag = 'structured-output-unavailable'
+    tag = 'structured-output-unavailable'
+StreamError.StructuredOutputUnavailable = _StreamError_StructuredOutputUnavailable  # type: ignore[attr-defined]
 
-    class Internal(_WitVariantCase):
-        """Catch-all for internal failures."""
-        tag = 'internal'
+class _StreamError_Internal(_WitVariantCase, StreamError):
+    """Catch-all for internal failures."""
+    tag = 'internal'
+StreamError.Internal = _StreamError_Internal  # type: ignore[attr-defined]
 
-    _CASES: dict[str, type] = {
-        'model': Model,
-        'tool': Tool,
-        'context-window-exceeded': ContextWindowExceeded,
-        'max-tokens-reached': MaxTokensReached,
-        'structured-output-unavailable': StructuredOutputUnavailable,
-        'internal': Internal,
-    }
+StreamError._CASES = {  # type: ignore[attr-defined]
+    'model': StreamError.Model,
+    'tool': StreamError.Tool,
+    'context-window-exceeded': StreamError.ContextWindowExceeded,
+    'max-tokens-reached': StreamError.MaxTokensReached,
+    'structured-output-unavailable': StreamError.StructuredOutputUnavailable,
+    'internal': StreamError.Internal,
+}
 
-    @staticmethod
-    def lift(raw: _WitVariant) -> StreamError:
-        cls = StreamError._CASES.get(raw.tag)
-        if cls is None:
-            raise ValueError(f'unknown StreamError arm: {raw.tag!r}')
-        return cls(raw.payload)
+
+def _StreamError_lift(raw: _WitVariant) -> StreamError:
+    cls = StreamError._CASES.get(raw.tag)  # type: ignore[attr-defined]
+    if cls is None:
+        raise ValueError(f'unknown StreamError arm: {raw.tag!r}')
+    return cls(raw.payload)
+StreamError.lift = staticmethod(_StreamError_lift)  # type: ignore[attr-defined]
 
 class StreamEvent:
     """Events yielded during agent streaming.
 Hot-path arms: `text-delta`, `tool-use`, `tool-result`. Other content
 blocks flow through `content`. Lifecycle arms (`before-invocation`
 through `agent-result`) mirror a hook system and can be filtered by tag."""
+    if TYPE_CHECKING:
+        TextDelta: ClassVar[type["_StreamEvent_TextDelta"]]
+        ToolUse: ClassVar[type["_StreamEvent_ToolUse"]]
+        ToolResult: ClassVar[type["_StreamEvent_ToolResult"]]
+        Content: ClassVar[type["_StreamEvent_Content"]]
+        Metadata: ClassVar[type["_StreamEvent_Metadata"]]
+        Stop: ClassVar[type["_StreamEvent_Stop"]]
+        Redaction: ClassVar[type["_StreamEvent_Redaction"]]
+        Error: ClassVar[type["_StreamEvent_Error"]]
+        Interrupt: ClassVar[type["_StreamEvent_Interrupt"]]
+        Initialized: ClassVar[type["_StreamEvent_Initialized"]]
+        BeforeInvocation: ClassVar[type["_StreamEvent_BeforeInvocation"]]
+        AfterInvocation: ClassVar[type["_StreamEvent_AfterInvocation"]]
+        MessageAdded: ClassVar[type["_StreamEvent_MessageAdded"]]
+        BeforeModelCall: ClassVar[type["_StreamEvent_BeforeModelCall"]]
+        AfterModelCall: ClassVar[type["_StreamEvent_AfterModelCall"]]
+        BeforeTools: ClassVar[type["_StreamEvent_BeforeTools"]]
+        AfterTools: ClassVar[type["_StreamEvent_AfterTools"]]
+        BeforeToolCall: ClassVar[type["_StreamEvent_BeforeToolCall"]]
+        AfterToolCall: ClassVar[type["_StreamEvent_AfterToolCall"]]
+        ContentBlock: ClassVar[type["_StreamEvent_ContentBlock"]]
+        ModelMessage: ClassVar[type["_StreamEvent_ModelMessage"]]
+        ToolResultHook: ClassVar[type["_StreamEvent_ToolResultHook"]]
+        ToolUpdate: ClassVar[type["_StreamEvent_ToolUpdate"]]
+        ModelUpdate: ClassVar[type["_StreamEvent_ModelUpdate"]]
+        AgentResult: ClassVar[type["_StreamEvent_AgentResult"]]
+        _CASES: ClassVar[dict[str, type]]
+        @staticmethod
+        def lift(raw: _WitVariant) -> "StreamEvent": ...
 
-    class TextDelta(_WitVariantCase):
-        """Incremental text from the model."""
-        tag = 'text-delta'
+class _StreamEvent_TextDelta(_WitVariantCase, StreamEvent):
+    """Incremental text from the model."""
+    tag = 'text-delta'
+StreamEvent.TextDelta = _StreamEvent_TextDelta  # type: ignore[attr-defined]
 
-    class ToolUse(_WitVariantCase):
-        """Model requested a tool call."""
-        tag = 'tool-use'
+class _StreamEvent_ToolUse(_WitVariantCase, StreamEvent):
+    """Model requested a tool call."""
+    tag = 'tool-use'
+StreamEvent.ToolUse = _StreamEvent_ToolUse  # type: ignore[attr-defined]
 
-    class ToolResult(_WitVariantCase):
-        """Tool call completed."""
-        tag = 'tool-result'
+class _StreamEvent_ToolResult(_WitVariantCase, StreamEvent):
+    """Tool call completed."""
+    tag = 'tool-result'
+StreamEvent.ToolResult = _StreamEvent_ToolResult  # type: ignore[attr-defined]
 
-    class Content(_WitVariantCase):
-        """Non-hot-path content block (image, reasoning, citations, etc)."""
-        tag = 'content'
+class _StreamEvent_Content(_WitVariantCase, StreamEvent):
+    """Non-hot-path content block (image, reasoning, citations, etc)."""
+    tag = 'content'
+StreamEvent.Content = _StreamEvent_Content  # type: ignore[attr-defined]
 
-    class Metadata(_WitVariantCase):
-        """Cumulative usage and metrics snapshot."""
-        tag = 'metadata'
+class _StreamEvent_Metadata(_WitVariantCase, StreamEvent):
+    """Cumulative usage and metrics snapshot."""
+    tag = 'metadata'
+StreamEvent.Metadata = _StreamEvent_Metadata  # type: ignore[attr-defined]
 
-    class Stop(_WitVariantCase):
-        """Terminal event for the stream."""
-        tag = 'stop'
+class _StreamEvent_Stop(_WitVariantCase, StreamEvent):
+    """Terminal event for the stream."""
+    tag = 'stop'
+StreamEvent.Stop = _StreamEvent_Stop  # type: ignore[attr-defined]
 
-    class Redaction(_WitVariantCase):
-        """Guardrail redaction fired."""
-        tag = 'redaction'
+class _StreamEvent_Redaction(_WitVariantCase, StreamEvent):
+    """Guardrail redaction fired."""
+    tag = 'redaction'
+StreamEvent.Redaction = _StreamEvent_Redaction  # type: ignore[attr-defined]
 
-    class Error(_WitVariantCase):
-        """Recoverable error surfaced mid-stream."""
-        tag = 'error'
+class _StreamEvent_Error(_WitVariantCase, StreamEvent):
+    """Recoverable error surfaced mid-stream."""
+    tag = 'error'
+StreamEvent.Error = _StreamEvent_Error  # type: ignore[attr-defined]
 
-    class Interrupt(_WitVariantCase):
-        """Human-in-the-loop pause; resume via `response-stream.respond`."""
-        tag = 'interrupt'
+class _StreamEvent_Interrupt(_WitVariantCase, StreamEvent):
+    """Human-in-the-loop pause; resume via `response-stream.respond`."""
+    tag = 'interrupt'
+StreamEvent.Interrupt = _StreamEvent_Interrupt  # type: ignore[attr-defined]
 
-    class Initialized(_WitVariantCase):
-        """Agent finished construction."""
-        tag = 'initialized'
+class _StreamEvent_Initialized(_WitVariantCase, StreamEvent):
+    """Agent finished construction."""
+    tag = 'initialized'
+StreamEvent.Initialized = _StreamEvent_Initialized  # type: ignore[attr-defined]
 
-    class BeforeInvocation(_WitVariantCase):
-        """About to process a user invocation."""
-        tag = 'before-invocation'
+class _StreamEvent_BeforeInvocation(_WitVariantCase, StreamEvent):
+    """About to process a user invocation."""
+    tag = 'before-invocation'
+StreamEvent.BeforeInvocation = _StreamEvent_BeforeInvocation  # type: ignore[attr-defined]
 
-    class AfterInvocation(_WitVariantCase):
-        """Finished processing a user invocation."""
-        tag = 'after-invocation'
+class _StreamEvent_AfterInvocation(_WitVariantCase, StreamEvent):
+    """Finished processing a user invocation."""
+    tag = 'after-invocation'
+StreamEvent.AfterInvocation = _StreamEvent_AfterInvocation  # type: ignore[attr-defined]
 
-    class MessageAdded(_WitVariantCase):
-        """A message was appended to the conversation."""
-        tag = 'message-added'
+class _StreamEvent_MessageAdded(_WitVariantCase, StreamEvent):
+    """A message was appended to the conversation."""
+    tag = 'message-added'
+StreamEvent.MessageAdded = _StreamEvent_MessageAdded  # type: ignore[attr-defined]
 
-    class BeforeModelCall(_WitVariantCase):
-        """About to call the model."""
-        tag = 'before-model-call'
+class _StreamEvent_BeforeModelCall(_WitVariantCase, StreamEvent):
+    """About to call the model."""
+    tag = 'before-model-call'
+StreamEvent.BeforeModelCall = _StreamEvent_BeforeModelCall  # type: ignore[attr-defined]
 
-    class AfterModelCall(_WitVariantCase):
-        """Model call returned."""
-        tag = 'after-model-call'
+class _StreamEvent_AfterModelCall(_WitVariantCase, StreamEvent):
+    """Model call returned."""
+    tag = 'after-model-call'
+StreamEvent.AfterModelCall = _StreamEvent_AfterModelCall  # type: ignore[attr-defined]
 
-    class BeforeTools(_WitVariantCase):
-        """About to run a batch of tool calls from one assistant turn."""
-        tag = 'before-tools'
+class _StreamEvent_BeforeTools(_WitVariantCase, StreamEvent):
+    """About to run a batch of tool calls from one assistant turn."""
+    tag = 'before-tools'
+StreamEvent.BeforeTools = _StreamEvent_BeforeTools  # type: ignore[attr-defined]
 
-    class AfterTools(_WitVariantCase):
-        """Tool batch finished."""
-        tag = 'after-tools'
+class _StreamEvent_AfterTools(_WitVariantCase, StreamEvent):
+    """Tool batch finished."""
+    tag = 'after-tools'
+StreamEvent.AfterTools = _StreamEvent_AfterTools  # type: ignore[attr-defined]
 
-    class BeforeToolCall(_WitVariantCase):
-        """About to call a single tool."""
-        tag = 'before-tool-call'
+class _StreamEvent_BeforeToolCall(_WitVariantCase, StreamEvent):
+    """About to call a single tool."""
+    tag = 'before-tool-call'
+StreamEvent.BeforeToolCall = _StreamEvent_BeforeToolCall  # type: ignore[attr-defined]
 
-    class AfterToolCall(_WitVariantCase):
-        """Tool call returned."""
-        tag = 'after-tool-call'
+class _StreamEvent_AfterToolCall(_WitVariantCase, StreamEvent):
+    """Tool call returned."""
+    tag = 'after-tool-call'
+StreamEvent.AfterToolCall = _StreamEvent_AfterToolCall  # type: ignore[attr-defined]
 
-    class ContentBlock(_WitVariantCase):
-        """A content block was assembled during streaming."""
-        tag = 'content-block'
+class _StreamEvent_ContentBlock(_WitVariantCase, StreamEvent):
+    """A content block was assembled during streaming."""
+    tag = 'content-block'
+StreamEvent.ContentBlock = _StreamEvent_ContentBlock  # type: ignore[attr-defined]
 
-    class ModelMessage(_WitVariantCase):
-        """Model finished producing a full message."""
-        tag = 'model-message'
+class _StreamEvent_ModelMessage(_WitVariantCase, StreamEvent):
+    """Model finished producing a full message."""
+    tag = 'model-message'
+StreamEvent.ModelMessage = _StreamEvent_ModelMessage  # type: ignore[attr-defined]
 
-    class ToolResultHook(_WitVariantCase):
-        """Tool finished execution (completion event, not streaming update)."""
-        tag = 'tool-result-hook'
+class _StreamEvent_ToolResultHook(_WitVariantCase, StreamEvent):
+    """Tool finished execution (completion event, not streaming update)."""
+    tag = 'tool-result-hook'
+StreamEvent.ToolResultHook = _StreamEvent_ToolResultHook  # type: ignore[attr-defined]
 
-    class ToolUpdate(_WitVariantCase):
-        """Streaming update from a tool."""
-        tag = 'tool-update'
+class _StreamEvent_ToolUpdate(_WitVariantCase, StreamEvent):
+    """Streaming update from a tool."""
+    tag = 'tool-update'
+StreamEvent.ToolUpdate = _StreamEvent_ToolUpdate  # type: ignore[attr-defined]
 
-    class ModelUpdate(_WitVariantCase):
-        """Streaming update from the model."""
-        tag = 'model-update'
+class _StreamEvent_ModelUpdate(_WitVariantCase, StreamEvent):
+    """Streaming update from the model."""
+    tag = 'model-update'
+StreamEvent.ModelUpdate = _StreamEvent_ModelUpdate  # type: ignore[attr-defined]
 
-    class AgentResult(_WitVariantCase):
-        """Final event for an invocation, carrying the terminal result."""
-        tag = 'agent-result'
+class _StreamEvent_AgentResult(_WitVariantCase, StreamEvent):
+    """Final event for an invocation, carrying the terminal result."""
+    tag = 'agent-result'
+StreamEvent.AgentResult = _StreamEvent_AgentResult  # type: ignore[attr-defined]
 
-    _CASES: dict[str, type] = {
-        'text-delta': TextDelta,
-        'tool-use': ToolUse,
-        'tool-result': ToolResult,
-        'content': Content,
-        'metadata': Metadata,
-        'stop': Stop,
-        'redaction': Redaction,
-        'error': Error,
-        'interrupt': Interrupt,
-        'initialized': Initialized,
-        'before-invocation': BeforeInvocation,
-        'after-invocation': AfterInvocation,
-        'message-added': MessageAdded,
-        'before-model-call': BeforeModelCall,
-        'after-model-call': AfterModelCall,
-        'before-tools': BeforeTools,
-        'after-tools': AfterTools,
-        'before-tool-call': BeforeToolCall,
-        'after-tool-call': AfterToolCall,
-        'content-block': ContentBlock,
-        'model-message': ModelMessage,
-        'tool-result-hook': ToolResultHook,
-        'tool-update': ToolUpdate,
-        'model-update': ModelUpdate,
-        'agent-result': AgentResult,
-    }
+StreamEvent._CASES = {  # type: ignore[attr-defined]
+    'text-delta': StreamEvent.TextDelta,
+    'tool-use': StreamEvent.ToolUse,
+    'tool-result': StreamEvent.ToolResult,
+    'content': StreamEvent.Content,
+    'metadata': StreamEvent.Metadata,
+    'stop': StreamEvent.Stop,
+    'redaction': StreamEvent.Redaction,
+    'error': StreamEvent.Error,
+    'interrupt': StreamEvent.Interrupt,
+    'initialized': StreamEvent.Initialized,
+    'before-invocation': StreamEvent.BeforeInvocation,
+    'after-invocation': StreamEvent.AfterInvocation,
+    'message-added': StreamEvent.MessageAdded,
+    'before-model-call': StreamEvent.BeforeModelCall,
+    'after-model-call': StreamEvent.AfterModelCall,
+    'before-tools': StreamEvent.BeforeTools,
+    'after-tools': StreamEvent.AfterTools,
+    'before-tool-call': StreamEvent.BeforeToolCall,
+    'after-tool-call': StreamEvent.AfterToolCall,
+    'content-block': StreamEvent.ContentBlock,
+    'model-message': StreamEvent.ModelMessage,
+    'tool-result-hook': StreamEvent.ToolResultHook,
+    'tool-update': StreamEvent.ToolUpdate,
+    'model-update': StreamEvent.ModelUpdate,
+    'agent-result': StreamEvent.AgentResult,
+}
 
-    @staticmethod
-    def lift(raw: _WitVariant) -> StreamEvent:
-        cls = StreamEvent._CASES.get(raw.tag)
-        if cls is None:
-            raise ValueError(f'unknown StreamEvent arm: {raw.tag!r}')
-        return cls(raw.payload)
+
+def _StreamEvent_lift(raw: _WitVariant) -> StreamEvent:
+    cls = StreamEvent._CASES.get(raw.tag)  # type: ignore[attr-defined]
+    if cls is None:
+        raise ValueError(f'unknown StreamEvent arm: {raw.tag!r}')
+    return cls(raw.payload)
+StreamEvent.lift = staticmethod(_StreamEvent_lift)  # type: ignore[attr-defined]
