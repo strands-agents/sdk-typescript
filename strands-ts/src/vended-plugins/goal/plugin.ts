@@ -12,7 +12,7 @@
  *
  * // Natural-language goal — judged by an internal Agent built from the host's model.
  * const concise = new GoalLoop({
- *   validate: 'At most 3 sentences, accessible to a 10-year-old, no jargon.',
+ *   goal: 'At most 3 sentences, accessible to a 10-year-old, no jargon.',
  *   maxAttempts: 3,
  * })
  * const agent = new Agent({ model, plugins: [concise] })
@@ -24,7 +24,7 @@
  * ```ts
  * // Programmatic validator — runs your own check (here, a word-count cap).
  * const wordCount = new GoalLoop({
- *   validate: (response) => {
+ *   validator: (response) => {
  *     const text = response.content.flatMap((b) => (b.type === 'textBlock' ? [b.text] : [])).join(' ')
  *     const words = text.trim().split(/\s+/).length
  *     return words <= 50 || { passed: false, feedback: `Too long (${words} words). Cap at 50.` }
@@ -44,7 +44,7 @@
  * const execAsync = promisify(exec)
  *
  * new GoalLoop({
- *   validate: async () => {
+ *   validator: async () => {
  *     try {
  *       await execAsync('npm test')
  *       return true
@@ -78,17 +78,18 @@ export interface ValidationOutcome {
 }
 
 /**
- * Validator must return `true`, `false`, or a `ValidationOutcome`. Booleans
- * are shorthand: `true` → pass, `false` → fail with no feedback. Use the
- * object form when you have actionable feedback for the next attempt.
+ * Programmatic validator. Must return `true`, `false`, or a `ValidationOutcome`.
+ * Booleans are shorthand: `true` → pass, `false` → fail with no feedback. Use
+ * the object form when you have actionable feedback for the next attempt.
  *
  * The second argument is the host agent — read `agent.messages` for the full
  * transcript (the same view the built-in NL judge sees), or any other state
  * the validator needs.
  */
-export type Validator =
-  | string
-  | ((response: Message, agent: LocalAgent) => boolean | ValidationOutcome | Promise<boolean | ValidationOutcome>)
+export type Validator = (
+  response: Message,
+  agent: LocalAgent
+) => boolean | ValidationOutcome | Promise<boolean | ValidationOutcome>
 
 /** Why a goal run ended. */
 export type GoalStopReason = 'satisfied' | 'maxAttempts' | 'timeout'
@@ -109,9 +110,9 @@ export interface GoalResult {
 }
 
 /**
- * Tuning for the auto-built judge used when {@link GoalLoopOptions.validate} is
- * a string. Harmlessly ignored when `validate` is a function — no judge is built
- * in that case.
+ * Tuning for the auto-built judge used when {@link GoalLoopOptions.goal} is set.
+ * Harmlessly ignored when `validator` is used instead — no judge is built in
+ * that case.
  */
 export interface JudgeConfig {
   /**
@@ -127,14 +128,20 @@ export interface JudgeConfig {
   systemPrompt?: string
 }
 
-/** Configuration for {@link GoalLoop}. */
+/**
+ * Configuration for {@link GoalLoop}. Provide exactly one of `goal` (a
+ * natural-language goal graded by an internal judge Agent) or `validator` (a
+ * programmatic predicate) — supplying both, or neither, throws at construction.
+ */
 export interface GoalLoopOptions {
   /**
-   * Validator. Pass a string for a natural-language goal — an internal judge
-   * Agent grades the response. Pass a function for a programmatic predicate.
+   * Natural-language goal. An internal judge Agent grades each attempt against
+   * it and returns feedback on failure. Mutually exclusive with `validator`.
    */
-  validate: Validator
-  /** Tuning for the auto-built judge used when `validate` is a string. */
+  goal?: string
+  /** Programmatic validator predicate. Mutually exclusive with `goal`. */
+  validator?: Validator
+  /** Tuning for the auto-built judge used when `goal` is set. */
   judge?: JudgeConfig
   /** Max attempts. Defaults to `Infinity`. `warnOnce` when both this and `timeout` are unbounded. */
   maxAttempts?: number
@@ -224,7 +231,10 @@ const agentsWithGoalLoop = new WeakSet<LocalAgent>()
 export class GoalLoop implements Plugin {
   readonly name: string
 
-  private readonly _validate: Validator
+  /** Set when a programmatic `validator` was supplied; mutually exclusive with `_goal`. */
+  private readonly _validator?: Validator
+  /** Set when a natural-language `goal` was supplied; mutually exclusive with `_validator`. */
+  private readonly _goal?: string
   private readonly _judgeModel?: Model
   private readonly _judgeSystemPrompt: string
   private readonly _maxAttempts: number
@@ -235,6 +245,12 @@ export class GoalLoop implements Plugin {
   private readonly _runs = new WeakMap<LocalAgent, RunState>()
 
   constructor(opts: GoalLoopOptions) {
+    if (opts.goal !== undefined && opts.validator !== undefined) {
+      throw new Error('GoalLoop: provide either `goal` or `validator`, not both')
+    }
+    if (opts.goal === undefined && opts.validator === undefined) {
+      throw new Error('GoalLoop: provide either `goal` or `validator`')
+    }
     if ((opts.maxAttempts ?? Infinity) < 1) {
       throw new Error(`maxAttempts=<${opts.maxAttempts}> | must be at least 1`)
     }
@@ -242,7 +258,8 @@ export class GoalLoop implements Plugin {
       throw new Error(`timeout=<${opts.timeout}> | must be at least 1`)
     }
     this.name = opts.name ?? 'strands:goal-loop'
-    this._validate = opts.validate
+    if (opts.goal !== undefined) this._goal = opts.goal
+    if (opts.validator !== undefined) this._validator = opts.validator
     if (opts.judge?.model !== undefined) this._judgeModel = opts.judge.model
     this._judgeSystemPrompt = opts.judge?.systemPrompt ?? JUDGE_SYSTEM_PROMPT
     this._maxAttempts = opts.maxAttempts ?? Infinity
@@ -276,7 +293,7 @@ export class GoalLoop implements Plugin {
       )
     }
     agentsWithGoalLoop.add(agent)
-    const validator = this._buildValidator(this._validate, agent)
+    const validator = this._buildValidator(agent)
 
     // Tells the next After call whether to start a fresh run or continue the
     // current one. Clears stale state from a prior invoke that threw mid-run,
@@ -368,23 +385,22 @@ export class GoalLoop implements Plugin {
   }
 
   /**
-   * Compiles the user's `validate` option into the canonical
+   * Compiles the configured `validator` or `goal` into the canonical
    * `(response) => Promise<ValidationOutcome>` shape used by the After hook.
-   * The string-validator path builds a fresh judge `Agent` per call so prior
-   * judgements' prompts don't leak into the next judgement's context.
+   * The goal path builds a fresh judge `Agent` per call so prior judgements'
+   * prompts don't leak into the next judgement's context.
    */
-  private _buildValidator(
-    validator: Validator,
-    hostAgent: LocalAgent
-  ): (response: Message) => Promise<ValidationOutcome> {
-    if (typeof validator === 'function') {
+  private _buildValidator(hostAgent: LocalAgent): (response: Message) => Promise<ValidationOutcome> {
+    const validator = this._validator
+    if (validator) {
       return async (response) => {
         const outcome = await validator(response, hostAgent)
         if (typeof outcome === 'boolean') return { passed: outcome }
         return outcome
       }
     }
-    const goalDescription = validator
+    // Constructor guarantees exactly one of `_validator` / `_goal` is set.
+    const goalDescription = this._goal!
     // The NL judge intentionally ignores the `response` argument — its prompt
     // includes the full host transcript (via `buildJudgePrompt`) so the judge
     // can evaluate against context, not just the last assistant turn.

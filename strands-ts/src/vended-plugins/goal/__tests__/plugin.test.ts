@@ -13,28 +13,38 @@ describe('GoalLoop', () => {
   describe('constructor', () => {
     it('uses default name and unbounded budgets', () => {
       const warnSpy = vi.spyOn(logger, 'warn').mockImplementation(() => {})
-      const p = new GoalLoop({ validate: () => true, name: 'unique-defaults-test' })
+      const p = new GoalLoop({ validator: () => true, name: 'unique-defaults-test' })
       expect(p.name).toBe('unique-defaults-test')
       expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('execution is unbounded'))
       warnSpy.mockRestore()
     })
 
     it('accepts custom name', () => {
-      const p = new GoalLoop({ validate: () => true, name: 'my:goal' })
+      const p = new GoalLoop({ validator: () => true, name: 'my:goal' })
       expect(p.name).toBe('my:goal')
     })
 
+    it('throws when both goal and validator are provided', () => {
+      expect(() => new GoalLoop({ goal: 'be concise', validator: () => true })).toThrow(
+        /provide either `goal` or `validator`, not both/
+      )
+    })
+
+    it('throws when neither goal nor validator is provided', () => {
+      expect(() => new GoalLoop({} as never)).toThrow(/provide either `goal` or `validator`/)
+    })
+
     it('throws when maxAttempts < 1', () => {
-      expect(() => new GoalLoop({ validate: () => true, maxAttempts: 0 })).toThrow(/maxAttempts/)
+      expect(() => new GoalLoop({ validator: () => true, maxAttempts: 0 })).toThrow(/maxAttempts/)
     })
 
     it('throws when timeout < 1', () => {
-      expect(() => new GoalLoop({ validate: () => true, timeout: 0 })).toThrow(/timeout/)
+      expect(() => new GoalLoop({ validator: () => true, timeout: 0 })).toThrow(/timeout/)
     })
 
     it('does not warn when maxAttempts is set', () => {
       const warnSpy = vi.spyOn(logger, 'warn').mockImplementation(() => {})
-      new GoalLoop({ validate: () => true, maxAttempts: 5, name: 'bounded-by-attempts' })
+      new GoalLoop({ validator: () => true, maxAttempts: 5, name: 'bounded-by-attempts' })
       expect(warnSpy).not.toHaveBeenCalled()
       warnSpy.mockRestore()
     })
@@ -43,13 +53,13 @@ describe('GoalLoop', () => {
   describe('function validator', () => {
     it('passes on first attempt with no resume', async () => {
       const model = new MockMessageModel().addTurn({ type: 'textBlock', text: 'first' })
-      const validate = vi.fn(() => true)
-      const plugin = new GoalLoop({ validate, maxAttempts: 5, name: 'fn-pass-first' })
+      const validator = vi.fn(() => true)
+      const plugin = new GoalLoop({ validator, maxAttempts: 5, name: 'fn-pass-first' })
       const agent = new Agent({ model, plugins: [plugin], printer: false })
 
       const result = await agent.invoke('do it')
 
-      expect(validate).toHaveBeenCalledTimes(1)
+      expect(validator).toHaveBeenCalledTimes(1)
       expect(result.lastMessage.content[0]).toEqual({ type: 'textBlock', text: 'first' })
       expect(plugin.lastResult(agent)).toEqual({
         passed: true,
@@ -67,7 +77,7 @@ describe('GoalLoop', () => {
       let n = 0
       const plugin = new GoalLoop({
         name: 'fn-feedback-loop',
-        validate: () => {
+        validator: () => {
           n++
           return n === 3 || { passed: false, feedback: `attempt ${n} too long` }
         },
@@ -104,7 +114,7 @@ describe('GoalLoop', () => {
 
       const plugin = new GoalLoop({
         name: 'fn-maxattempts',
-        validate: () => ({ passed: false, feedback: 'nope' }),
+        validator: () => ({ passed: false, feedback: 'nope' }),
         maxAttempts: 3,
       })
       const agent = new Agent({ model, plugins: [plugin], printer: false })
@@ -133,7 +143,7 @@ describe('GoalLoop', () => {
       let n = 0
       const plugin = new GoalLoop({
         name: 'fn-throws',
-        validate: () => {
+        validator: () => {
           n++
           if (n === 1) throw new Error('boom')
           return true
@@ -164,7 +174,7 @@ describe('GoalLoop', () => {
       let n = 0
       const plugin = new GoalLoop({
         name: 'fn-async',
-        validate: async () => {
+        validator: async () => {
           n++
           const localN = n
           await new Promise((r) => setTimeout(r, 1))
@@ -191,7 +201,7 @@ describe('GoalLoop', () => {
       const seen: Message[] = []
       const plugin = new GoalLoop({
         name: 'fn-receives-message',
-        validate: (response) => {
+        validator: (response) => {
           seen.push(response)
           return true
         },
@@ -216,7 +226,7 @@ describe('GoalLoop', () => {
         let attemptCount = 0
         const plugin = new GoalLoop({
           name: 'fn-timeout',
-          validate: async () => {
+          validator: async () => {
             attemptCount++
             if (attemptCount === 1) {
               await new Promise((resolve) => setTimeout(resolve, 30))
@@ -247,7 +257,7 @@ describe('GoalLoop', () => {
 
   describe('lastResult lifecycle', () => {
     it('is undefined before first invoke', () => {
-      const plugin = new GoalLoop({ validate: () => true, maxAttempts: 1, name: 'lr-untouched' })
+      const plugin = new GoalLoop({ validator: () => true, maxAttempts: 1, name: 'lr-untouched' })
       const model = new MockMessageModel()
       const agent = new Agent({ model, plugins: [plugin], printer: false })
       expect(plugin.lastResult(agent)).toBeUndefined()
@@ -256,7 +266,7 @@ describe('GoalLoop', () => {
     it('is replaced on each completed run', async () => {
       const plugin = new GoalLoop({
         name: 'lr-replaced',
-        validate: () => true,
+        validator: () => true,
         maxAttempts: 1,
       })
 
@@ -285,7 +295,7 @@ describe('GoalLoop', () => {
       const model = new MockMessageModel().addTurn(new Error('boom'))
       const plugin = new GoalLoop({
         name: 'lr-throw',
-        validate: () => true,
+        validator: () => true,
         maxAttempts: 3,
       })
       const agent = new Agent({ model, plugins: [plugin], printer: false })
@@ -303,7 +313,7 @@ describe('GoalLoop', () => {
       let plugin: GoalLoop
       plugin = new GoalLoop({
         name: 'lr-midflight',
-        validate: (response, hostAgent) => {
+        validator: (response, hostAgent) => {
           observed.push(plugin.lastResult(hostAgent))
           const text = (response.content[0] as TextBlock).text
           return text === 'b'
@@ -336,7 +346,7 @@ describe('GoalLoop', () => {
       let n = 0
       const plugin = new GoalLoop({
         name: 'history-accumulates',
-        validate: () => {
+        validator: () => {
           n++
           return n === 3 ? true : { passed: false, feedback: `fb${n}` }
         },
@@ -360,7 +370,7 @@ describe('GoalLoop', () => {
       let n = 0
       const plugin = new GoalLoop({
         name: 'custom-resume-template',
-        validate: () => {
+        validator: () => {
           n++
           return n === 2 || { passed: false, feedback: 'too long' }
         },
@@ -394,7 +404,7 @@ describe('GoalLoop', () => {
       let n1 = 0
       const plugin = new GoalLoop({
         name: 'shared',
-        validate: (response) => {
+        validator: (response) => {
           const text = (response.content[0] as TextBlock).text
           if (text.startsWith('a2')) return true
           n1++
@@ -429,8 +439,8 @@ describe('GoalLoop', () => {
       // writer wins, silently dropping one's feedback. Compose constraints in a
       // single validator function instead.
       const model = new MockMessageModel().addTurn({ type: 'textBlock', text: 'x' })
-      const a = new GoalLoop({ validate: () => true, maxAttempts: 1, name: 'first' })
-      const b = new GoalLoop({ validate: () => true, maxAttempts: 1, name: 'second' })
+      const a = new GoalLoop({ validator: () => true, maxAttempts: 1, name: 'first' })
+      const b = new GoalLoop({ validator: () => true, maxAttempts: 1, name: 'second' })
       const agent = new Agent({ model, plugins: [a, b], printer: false })
 
       await expect(agent.invoke('go')).rejects.toThrow(/another GoalLoop is already attached/)
@@ -448,7 +458,7 @@ describe('GoalLoop', () => {
       let n = 0
       const plugin = new GoalLoop({
         name: 'fresh-context',
-        validate: () => {
+        validator: () => {
           n++
           return n === 3 ? true : { passed: false, feedback: `fb${n}` }
         },
@@ -509,7 +519,7 @@ describe('GoalLoop', () => {
       let n = 0
       const plugin = new GoalLoop({
         name: 'fresh-context-appstate',
-        validate: () => {
+        validator: () => {
           n++
           return n === 2 || { passed: false, feedback: 'retry' }
         },
@@ -539,7 +549,7 @@ describe('GoalLoop', () => {
       let n = 0
       const plugin = new GoalLoop({
         name: 'fresh-context-off',
-        validate: () => {
+        validator: () => {
           n++
           return n === 2 || { passed: false, feedback: 'fb' }
         },
@@ -560,7 +570,7 @@ describe('GoalLoop', () => {
       const model = new MockMessageModel().addTurn(new Error('boom')).addTurn({ type: 'textBlock', text: 'ok' })
       const plugin = new GoalLoop({
         name: 'throw-then-clean',
-        validate: () => true,
+        validator: () => true,
         maxAttempts: 3,
       })
       const agent = new Agent({ model, plugins: [plugin], printer: false })
@@ -676,7 +686,7 @@ describe('GoalLoop natural-language judge', () => {
 
     const plugin = new GoalLoop({
       name: 'nl-default-pass',
-      validate: 'be concise',
+      goal: 'be concise',
       maxAttempts: 3,
     })
     const agent = new Agent({ model, plugins: [plugin], printer: false })
@@ -699,7 +709,7 @@ describe('GoalLoop natural-language judge', () => {
 
     const plugin = new GoalLoop({
       name: 'nl-feedback',
-      validate: 'be concise',
+      goal: 'be concise',
       maxAttempts: 3,
     })
     const agent = new Agent({ model, plugins: [plugin], printer: false })
@@ -729,7 +739,7 @@ describe('GoalLoop natural-language judge', () => {
 
     const plugin = new GoalLoop({
       name: 'nl-judge-passes-on-retry',
-      validate: 'be concise',
+      goal: 'be concise',
       maxAttempts: 3,
     })
     const agent = new Agent({ model, plugins: [plugin], printer: false })
@@ -759,7 +769,7 @@ describe('GoalLoop natural-language judge', () => {
 
     const plugin = new GoalLoop({
       name: 'nl-fresh-judge-per-call',
-      validate: 'be concise',
+      goal: 'be concise',
       maxAttempts: 3,
     })
     const agent = new Agent({ model, plugins: [plugin], printer: false })
@@ -788,7 +798,7 @@ describe('GoalLoop natural-language judge', () => {
 
     const plugin = new GoalLoop({
       name: 'nl-override-model',
-      validate: 'be concise',
+      goal: 'be concise',
       judge: { model: judgeModel },
       maxAttempts: 1,
     })
@@ -822,7 +832,7 @@ describe('GoalLoop natural-language judge', () => {
 
     const plugin = new GoalLoop({
       name: 'nl-override-system-prompt',
-      validate: 'be concise',
+      goal: 'be concise',
       judge: { systemPrompt: 'CUSTOM_JUDGE_RUBRIC_MARKER' },
       maxAttempts: 1,
     })
