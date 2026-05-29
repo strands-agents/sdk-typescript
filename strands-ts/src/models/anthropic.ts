@@ -16,14 +16,7 @@ import { logger } from '../logging/logger.js'
 import { warnOnce } from '../logging/warn-once.js'
 import { MODEL_DEFAULTS, defaultMaxTokensWarningMessage, defaultModelWarningMessage } from './defaults.js'
 
-const CONTEXT_WINDOW_OVERFLOW_ERRORS = [
-  'prompt is too long',
-  'max_tokens exceeded',
-  'input too long',
-  'input is too long',
-  'input length exceeds context window',
-  'input and output tokens exceed your context limit',
-]
+const CONTEXT_WINDOW_OVERFLOW_ERRORS = ['prompt is too long', 'max_tokens exceeded', 'input too long']
 const TEXT_FILE_FORMATS = ['txt', 'md', 'markdown', 'csv', 'json', 'xml', 'html', 'yml', 'yaml', 'js', 'ts', 'py']
 
 export interface AnthropicModelConfig extends BaseModelConfig {
@@ -277,8 +270,7 @@ export class AnthropicModel extends Model<AnthropicModelConfig> {
     } catch (unknownError) {
       const error = normalizeError(unknownError)
 
-      const lowerMessage = error.message.toLowerCase()
-      if (CONTEXT_WINDOW_OVERFLOW_ERRORS.some((msg) => lowerMessage.includes(msg))) {
+      if (CONTEXT_WINDOW_OVERFLOW_ERRORS.some((msg) => error.message.includes(msg))) {
         throw new ContextWindowOverflowError(error.message)
       }
 

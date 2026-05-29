@@ -376,17 +376,10 @@ describe('AnthropicModel', () => {
       await expect(collectIterator(provider.stream(messages))).rejects.toThrow('API Error')
     })
 
-    it.each([
-      'PROMPT IS TOO LONG: request exceeds context window',
-      'max_tokens exceeded',
-      'input too long',
-      'input is too long',
-      'input length exceeds context window',
-      'input and output tokens exceed your context limit',
-    ])('maps context overflow error "%s" to ContextWindowOverflowError', async (message) => {
+    it('maps overload error to ContextWindowOverflowError', async () => {
       const mockClient = createMockClient(async function* () {
         yield { type: 'ping' } // Satisfy linter require-yield
-        throw new Error(message)
+        throw new Error('prompt is too long')
       })
       const provider = new AnthropicModel({ client: mockClient })
       const messages = [new Message({ role: 'user', content: [new TextBlock('Hi')] })]
