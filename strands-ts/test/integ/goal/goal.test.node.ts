@@ -25,7 +25,7 @@ describe.skipIf(bedrock.skip)('GoalLoop Integration', () => {
       let calls = 0
       const plugin = new GoalLoop({
         name: 'integ-standard',
-        validator: () => {
+        goal: () => {
           calls++
           if (calls === 1) return { passed: false, feedback: 'TRIGGER_RETRY_MARKER' }
           return true
@@ -63,7 +63,7 @@ describe.skipIf(bedrock.skip)('GoalLoop Integration', () => {
       let calls = 0
       const plugin = new GoalLoop({
         name: 'integ-fresh-context',
-        validator: () => {
+        goal: () => {
           calls++
           if (calls < 3) return { passed: false, feedback: `force-retry-${calls}` }
           return true

@@ -22,9 +22,10 @@
  *
  * @example
  * ```ts
- * // Programmatic validator — runs your own check (here, a word-count cap).
+ * // Programmatic validator — pass a function as `goal` to run your own check
+ * // (here, a word-count cap).
  * const wordCount = new GoalLoop({
- *   validator: (response) => {
+ *   goal: (response) => {
  *     const text = response.content.flatMap((b) => (b.type === 'textBlock' ? [b.text] : [])).join(' ')
  *     const words = text.trim().split(/\s+/).length
  *     return words <= 50 || { passed: false, feedback: `Too long (${words} words). Cap at 50.` }
@@ -44,7 +45,7 @@
  * const execAsync = promisify(exec)
  *
  * new GoalLoop({
- *   validator: async () => {
+ *   goal: async () => {
  *     try {
  *       await execAsync('npm test')
  *       return true
@@ -110,9 +111,9 @@ export interface GoalResult {
 }
 
 /**
- * Tuning for the auto-built judge used when {@link GoalLoopOptions.goal} is set.
- * Harmlessly ignored when `validator` is used instead — no judge is built in
- * that case.
+ * Tuning for the auto-built judge used when {@link GoalLoopOptions.goal} is a
+ * natural-language string. Harmlessly ignored when `goal` is a validator
+ * function — no judge is built in that case.
  */
 export interface JudgeConfig {
   /**
@@ -129,19 +130,20 @@ export interface JudgeConfig {
 }
 
 /**
- * Configuration for {@link GoalLoop}. Provide exactly one of `goal` (a
- * natural-language goal graded by an internal judge Agent) or `validator` (a
- * programmatic predicate) — supplying both, or neither, throws at construction.
+ * Configuration for {@link GoalLoop}.
  */
 export interface GoalLoopOptions {
   /**
-   * Natural-language goal. An internal judge Agent grades each attempt against
-   * it and returns feedback on failure. Mutually exclusive with `validator`.
+   * What "done" means for this loop. Either:
+   *
+   * - a **natural-language goal** (`string`) — an internal judge Agent grades
+   *   each attempt against it and returns feedback on failure; or
+   * - a **programmatic validator** ({@link Validator}) — your own predicate that
+   *   inspects the response (and host agent) and returns pass/fail plus optional
+   *   feedback.
    */
-  goal?: string
-  /** Programmatic validator predicate. Mutually exclusive with `goal`. */
-  validator?: Validator
-  /** Tuning for the auto-built judge used when `goal` is set. */
+  goal: string | Validator
+  /** Tuning for the auto-built judge used when `goal` is a natural-language string. */
   judge?: JudgeConfig
   /** Max attempts. Defaults to `Infinity`. `warnOnce` when both this and `timeout` are unbounded. */
   maxAttempts?: number
@@ -231,9 +233,9 @@ const agentsWithGoalLoop = new WeakSet<LocalAgent>()
 export class GoalLoop implements Plugin {
   readonly name: string
 
-  /** Set when a programmatic `validator` was supplied; mutually exclusive with `_goal`. */
+  /** Set when a programmatic validator was supplied as `goal`; mutually exclusive with `_goal`. */
   private readonly _validator?: Validator
-  /** Set when a natural-language `goal` was supplied; mutually exclusive with `_validator`. */
+  /** Set when a natural-language goal string was supplied; mutually exclusive with `_validator`. */
   private readonly _goal?: string
   private readonly _judgeModel?: Model
   private readonly _judgeSystemPrompt: string
@@ -245,11 +247,8 @@ export class GoalLoop implements Plugin {
   private readonly _runs = new WeakMap<LocalAgent, RunState>()
 
   constructor(opts: GoalLoopOptions) {
-    if (opts.goal !== undefined && opts.validator !== undefined) {
-      throw new Error('GoalLoop: provide either `goal` or `validator`, not both')
-    }
-    if (opts.goal === undefined && opts.validator === undefined) {
-      throw new Error('GoalLoop: provide either `goal` or `validator`')
+    if (opts.goal === undefined) {
+      throw new Error('GoalLoop: `goal` is required (a natural-language string or a validator function)')
     }
     if ((opts.maxAttempts ?? Infinity) < 1) {
       throw new Error(`maxAttempts=<${opts.maxAttempts}> | must be at least 1`)
@@ -258,8 +257,8 @@ export class GoalLoop implements Plugin {
       throw new Error(`timeout=<${opts.timeout}> | must be at least 1`)
     }
     this.name = opts.name ?? 'strands:goal-loop'
-    if (opts.goal !== undefined) this._goal = opts.goal
-    if (opts.validator !== undefined) this._validator = opts.validator
+    if (typeof opts.goal === 'string') this._goal = opts.goal
+    else this._validator = opts.goal
     if (opts.judge?.model !== undefined) this._judgeModel = opts.judge.model
     this._judgeSystemPrompt = opts.judge?.systemPrompt ?? JUDGE_SYSTEM_PROMPT
     this._maxAttempts = opts.maxAttempts ?? Infinity
