@@ -384,10 +384,11 @@ export class GoalLoop implements Plugin {
   }
 
   /**
-   * Compiles the configured `validator` or `goal` into the canonical
-   * `(response) => Promise<ValidationOutcome>` shape used by the After hook.
-   * The goal path builds a fresh judge `Agent` per call so prior judgements'
-   * prompts don't leak into the next judgement's context.
+   * Compiles the configured `goal` (a natural-language string or a `Validator`
+   * function) into the canonical `(response) => Promise<ValidationOutcome>`
+   * shape used by the After hook. The string path builds a fresh judge `Agent`
+   * per call so prior judgements' prompts don't leak into the next judgement's
+   * context.
    */
   private _buildValidator(hostAgent: LocalAgent): (response: Message) => Promise<ValidationOutcome> {
     const validator = this._validator

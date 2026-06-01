@@ -116,7 +116,7 @@ const offloader = new ContextOffloader({ storage: new InMemoryStorage() })
 if (!(offloader instanceof ContextOffloader)) {
   throw new Error('ContextOffloader construction failed')
 }
-const goalLoop = new GoalLoop({ validator: () => true, maxAttempts: 1 })
+const goalLoop = new GoalLoop({ goal: () => true, maxAttempts: 1 })
 if (!(goalLoop instanceof GoalLoop)) {
   throw new Error('GoalLoop construction failed')
 }
