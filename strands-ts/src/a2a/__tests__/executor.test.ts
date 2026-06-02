@@ -11,6 +11,8 @@ import { ImageBlock, encodeBase64 } from '../../types/media.js'
 import { ContentBlockEvent, ModelStreamUpdateEvent } from '../../hooks/events.js'
 import { AgentResult } from '../../types/agent.js'
 import { Message } from '../../types/messages.js'
+import { CancelledError } from '../../errors.js'
+import { Interrupt } from '../../interrupt.js'
 
 function createMockEventBus(): ExecutionEventBus & { events: AgentExecutionEvent[] } {
   const events: AgentExecutionEvent[] = []
@@ -135,7 +137,7 @@ describe('A2AExecutor', () => {
 
       expect(agent.stream).toHaveBeenCalledWith(
         [new TextBlock('Line 1'), new TextBlock('[File: file (file://test.txt)]'), new TextBlock('Line 2')],
-        { invocationState: { a2aRequestContext: context } }
+        { invocationState: { a2aRequestContext: context }, cancelSignal: expect.any(AbortSignal) }
       )
     })
 
@@ -154,18 +156,256 @@ describe('A2AExecutor', () => {
       expect(options?.invocationState).toEqual({ a2aRequestContext: context })
     })
 
-    it('re-throws when agent throws, publishing only the initial task event', async () => {
+    it('transitions to failed state when agent throws', async () => {
       const model = new MockMessageModel().addTurn(new Error('Agent failed'))
       const agent = new Agent({ model, printer: false })
       const executor = new A2AExecutor(agent)
       const eventBus = createMockEventBus()
 
-      await expect(executor.execute(createRequestContext('Hello'), eventBus)).rejects.toThrow('Agent failed')
+      await executor.execute(createRequestContext('Hello'), eventBus)
 
-      // Only the initial task registration event is published before the error
-      expect(eventBus.events).toStrictEqual([
-        { kind: 'task', id: 'task-1', contextId: 'ctx-1', status: { state: 'working' } },
-      ])
+      const statusEvents = eventBus.events.filter((e): e is TaskStatusUpdateEvent => e.kind === 'status-update')
+
+      // Should have a failed status event (not throw)
+      expect(statusEvents).toHaveLength(1)
+      expect(statusEvents[0]).toStrictEqual({
+        kind: 'status-update',
+        taskId: 'task-1',
+        contextId: 'ctx-1',
+        status: {
+          state: 'failed',
+          message: {
+            kind: 'message',
+            messageId: expect.any(String),
+            role: 'agent',
+            parts: [{ kind: 'text', text: 'Agent execution failed' }],
+          },
+        },
+        final: true,
+      })
+    })
+
+    it('does not leak error details in failed status message', async () => {
+      const model = new MockMessageModel().addTurn(new Error('Secret internal path /home/user/.env'))
+      const agent = new Agent({ model, printer: false })
+      const executor = new A2AExecutor(agent)
+      const eventBus = createMockEventBus()
+
+      await executor.execute(createRequestContext('Hello'), eventBus)
+
+      const statusEvents = eventBus.events.filter((e): e is TaskStatusUpdateEvent => e.kind === 'status-update')
+      const failedMessage = statusEvents[0]!.status.message!.parts[0]
+      expect(failedMessage).toStrictEqual({ kind: 'text', text: 'Agent execution failed' })
+      expect(JSON.stringify(statusEvents[0])).not.toContain('Secret internal path')
+    })
+
+    it('transitions to canceled state when CancelledError is thrown', async () => {
+      const mockAgent: InvokableAgent = {
+        id: 'test-agent',
+        name: 'Test Agent',
+        invoke: vi.fn(),
+        // eslint-disable-next-line require-yield
+        async *stream() {
+          throw new CancelledError()
+        },
+      }
+
+      const executor = new A2AExecutor(mockAgent)
+      const eventBus = createMockEventBus()
+
+      await executor.execute(createRequestContext('Hello'), eventBus)
+
+      const statusEvents = eventBus.events.filter((e): e is TaskStatusUpdateEvent => e.kind === 'status-update')
+      expect(statusEvents).toHaveLength(1)
+      expect(statusEvents[0]!.status.state).toBe('canceled')
+      expect(statusEvents[0]!.final).toBe(true)
+    })
+
+    it('transitions to canceled state when DOMException AbortError is thrown', async () => {
+      const mockAgent: InvokableAgent = {
+        id: 'test-agent',
+        name: 'Test Agent',
+        invoke: vi.fn(),
+        // eslint-disable-next-line require-yield
+        async *stream() {
+          throw new DOMException('The operation was aborted', 'AbortError')
+        },
+      }
+
+      const executor = new A2AExecutor(mockAgent)
+      const eventBus = createMockEventBus()
+
+      await executor.execute(createRequestContext('Hello'), eventBus)
+
+      const statusEvents = eventBus.events.filter((e): e is TaskStatusUpdateEvent => e.kind === 'status-update')
+      expect(statusEvents).toHaveLength(1)
+      expect(statusEvents[0]!.status.state).toBe('canceled')
+      expect(statusEvents[0]!.final).toBe(true)
+    })
+
+    it('transitions to canceled state when agent returns stopReason cancelled', async () => {
+      const mockAgent: InvokableAgent = {
+        id: 'test-agent',
+        name: 'Test Agent',
+        invoke: vi.fn(),
+        // eslint-disable-next-line require-yield
+        async *stream() {
+          return new AgentResult({
+            stopReason: 'cancelled',
+            lastMessage: new Message({ role: 'assistant', content: [new TextBlock('Cancelled')] }),
+            invocationState: {},
+          })
+        },
+      }
+
+      const executor = new A2AExecutor(mockAgent)
+      const eventBus = createMockEventBus()
+
+      await executor.execute(createRequestContext('Hello'), eventBus)
+
+      const statusEvents = eventBus.events.filter((e): e is TaskStatusUpdateEvent => e.kind === 'status-update')
+      expect(statusEvents).toHaveLength(1)
+      expect(statusEvents[0]!.status.state).toBe('canceled')
+      expect(statusEvents[0]!.final).toBe(true)
+    })
+
+    it('transitions to input-required state when agent returns stopReason interrupt', async () => {
+      const mockAgent: InvokableAgent = {
+        id: 'test-agent',
+        name: 'Test Agent',
+        invoke: vi.fn(),
+        // eslint-disable-next-line require-yield
+        async *stream() {
+          return new AgentResult({
+            stopReason: 'interrupt',
+            lastMessage: new Message({ role: 'assistant', content: [new TextBlock('Need input')] }),
+            invocationState: {},
+            interrupts: [new Interrupt({ id: 'int-1', name: 'confirm', reason: 'Please confirm the action' })],
+          })
+        },
+      }
+
+      const executor = new A2AExecutor(mockAgent)
+      const eventBus = createMockEventBus()
+
+      await executor.execute(createRequestContext('Do something'), eventBus)
+
+      const statusEvents = eventBus.events.filter((e): e is TaskStatusUpdateEvent => e.kind === 'status-update')
+      expect(statusEvents).toHaveLength(1)
+      expect(statusEvents[0]!.status.state).toBe('input-required')
+      expect(statusEvents[0]!.final).toBe(true)
+      expect(statusEvents[0]!.status.message!.parts[0]).toStrictEqual({
+        kind: 'text',
+        text: '[confirm]: Please confirm the action',
+      })
+      // Structured interrupt data should be included as a DataPart for round-tripping
+      expect(statusEvents[0]!.status.message!.parts[1]).toStrictEqual({
+        kind: 'data',
+        data: { interrupts: [{ id: 'int-1', name: 'confirm', reason: 'Please confirm the action' }] },
+      })
+    })
+
+    it('transitions to input-required with generic message when no interrupts provided', async () => {
+      const mockAgent: InvokableAgent = {
+        id: 'test-agent',
+        name: 'Test Agent',
+        invoke: vi.fn(),
+        // eslint-disable-next-line require-yield
+        async *stream() {
+          return new AgentResult({
+            stopReason: 'interrupt',
+            lastMessage: new Message({ role: 'assistant', content: [new TextBlock('Need input')] }),
+            invocationState: {},
+          })
+        },
+      }
+
+      const executor = new A2AExecutor(mockAgent)
+      const eventBus = createMockEventBus()
+
+      await executor.execute(createRequestContext('Do something'), eventBus)
+
+      const statusEvents = eventBus.events.filter((e): e is TaskStatusUpdateEvent => e.kind === 'status-update')
+      expect(statusEvents[0]!.status.state).toBe('input-required')
+      expect(statusEvents[0]!.status.message!.parts[0]).toStrictEqual({
+        kind: 'text',
+        text: 'Agent requires additional input',
+      })
+    })
+
+    it('transitions to input-required with multiple interrupts', async () => {
+      const mockAgent: InvokableAgent = {
+        id: 'test-agent',
+        name: 'Test Agent',
+        invoke: vi.fn(),
+        // eslint-disable-next-line require-yield
+        async *stream() {
+          return new AgentResult({
+            stopReason: 'interrupt',
+            lastMessage: new Message({ role: 'assistant', content: [new TextBlock('')] }),
+            invocationState: {},
+            interrupts: [
+              new Interrupt({ id: 'int-1', name: 'approve', reason: 'Approve deployment' }),
+              new Interrupt({ id: 'int-2', name: 'select_env', reason: 'Choose environment' }),
+            ],
+          })
+        },
+      }
+
+      const executor = new A2AExecutor(mockAgent)
+      const eventBus = createMockEventBus()
+
+      await executor.execute(createRequestContext('Deploy'), eventBus)
+
+      const statusEvents = eventBus.events.filter((e): e is TaskStatusUpdateEvent => e.kind === 'status-update')
+      expect(statusEvents[0]!.status.message!.parts[0]).toStrictEqual({
+        kind: 'text',
+        text: '[approve]: Approve deployment\n[select_env]: Choose environment',
+      })
+      // Structured interrupt data for round-tripping
+      expect(statusEvents[0]!.status.message!.parts[1]).toStrictEqual({
+        kind: 'data',
+        data: {
+          interrupts: [
+            { id: 'int-1', name: 'approve', reason: 'Approve deployment' },
+            { id: 'int-2', name: 'select_env', reason: 'Choose environment' },
+          ],
+        },
+      })
+    })
+
+    it('renders object reasons as JSON strings in the text part', async () => {
+      const mockAgent: InvokableAgent = {
+        id: 'test-agent',
+        name: 'Test Agent',
+        invoke: vi.fn(),
+        // eslint-disable-next-line require-yield
+        async *stream() {
+          return new AgentResult({
+            stopReason: 'interrupt',
+            lastMessage: new Message({ role: 'assistant', content: [new TextBlock('')] }),
+            invocationState: {},
+            interrupts: [
+              new Interrupt({
+                id: 'int-1',
+                name: 'deploy',
+                reason: { step: 'deploy', target: 'prod' } as unknown as string,
+              }),
+            ],
+          })
+        },
+      }
+
+      const executor = new A2AExecutor(mockAgent)
+      const eventBus = createMockEventBus()
+
+      await executor.execute(createRequestContext('Deploy'), eventBus)
+
+      const statusEvents = eventBus.events.filter((e): e is TaskStatusUpdateEvent => e.kind === 'status-update')
+      expect(statusEvents[0]!.status.message!.parts[0]).toStrictEqual({
+        kind: 'text',
+        text: '[deploy]: {"step":"deploy","target":"prod"}',
+      })
     })
 
     it('publishes image content blocks as separate file artifacts', async () => {
@@ -239,14 +479,61 @@ describe('A2AExecutor', () => {
   })
 
   describe('cancelTask', () => {
-    it('throws A2AError.unsupportedOperation', async () => {
+    it('throws taskNotCancelable when task is not running', async () => {
       const model = new MockMessageModel().addTurn({ type: 'textBlock', text: '' })
       const agent = new Agent({ model, printer: false })
       const executor = new A2AExecutor(agent)
       const eventBus = createMockEventBus()
 
-      await expect(executor.cancelTask('task-1', eventBus)).rejects.toThrow('Task cancellation is not supported')
-      expect(eventBus.events).toStrictEqual([])
+      await expect(executor.cancelTask('nonexistent-task', eventBus)).rejects.toThrow()
+    })
+
+    it('signals cancellation to a running task via AbortController', async () => {
+      let cancelSignalReceived: AbortSignal | undefined
+      const mockAgent: InvokableAgent = {
+        id: 'test-agent',
+        name: 'Test Agent',
+        invoke: vi.fn(),
+        // eslint-disable-next-line require-yield
+        async *stream(_args, options) {
+          cancelSignalReceived = options?.cancelSignal
+          // Simulate some work
+          await new Promise((resolve) => setTimeout(resolve, 50))
+          // Check if cancelled
+          if (cancelSignalReceived?.aborted) {
+            throw new CancelledError()
+          }
+          return new AgentResult({
+            stopReason: 'endTurn',
+            lastMessage: new Message({ role: 'assistant', content: [new TextBlock('Done')] }),
+            invocationState: {},
+          })
+        },
+      }
+
+      const executor = new A2AExecutor(mockAgent)
+      const eventBus = createMockEventBus()
+      const context = createRequestContext('Hello', 'cancel-task-1')
+
+      // Start execution in background
+      const execPromise = executor.execute(context, eventBus)
+
+      // Give it time to start
+      await new Promise((resolve) => setTimeout(resolve, 10))
+
+      // Cancel the task
+      await executor.cancelTask('cancel-task-1', eventBus)
+
+      // Wait for execution to complete
+      await execPromise
+
+      // Verify the cancel signal was passed to the agent
+      expect(cancelSignalReceived).toBeDefined()
+      expect(cancelSignalReceived!.aborted).toBe(true)
+
+      // Verify the task was transitioned to canceled
+      const statusEvents = eventBus.events.filter((e): e is TaskStatusUpdateEvent => e.kind === 'status-update')
+      expect(statusEvents.some((e) => e.status.state === 'canceled')).toBe(true)
     })
   })
 })
