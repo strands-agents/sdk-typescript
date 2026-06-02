@@ -285,6 +285,18 @@ export {
 } from './mcp.js'
 export type { ElicitationCallback, ElicitationContext } from './types/elicitation.js'
 
+// Memory management
+export { MemoryManager } from './memory/index.js'
+export type {
+  MemoryEntry,
+  MemoryStore,
+  SearchOptions,
+  MemorySearchOptions,
+  MemoryStoreOptions,
+  MemoryToolConfig,
+  MemoryManagerConfig,
+} from './memory/index.js'
+
 // Session management
 export { SessionManager } from './session/session-manager.js'
 export type {
