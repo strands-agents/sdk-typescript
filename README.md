@@ -1,4 +1,16 @@
 <div align="center">
+
+### :warning: This repository has been archived
+
+**The TypeScript SDK has moved to the [strands-agents/harness-sdk](https://github.com/strands-agents/harness-sdk) monorepo.**
+
+The source code is now under [`strands-ts/`](https://github.com/strands-agents/harness-sdk/tree/main/strands-ts). All new development, issues, and pull requests should go there.
+
+</div>
+
+---
+
+<div align="center">
   <div>
     <a href="https://strandsagents.com">
       <img src="https://strandsagents.com/latest/assets/logo-github.svg" alt="Strands Agents" width="55px" height="105px">
