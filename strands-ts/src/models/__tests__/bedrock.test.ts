@@ -448,6 +448,18 @@ describe('BedrockModel', () => {
         temperature: 0.7,
       })
     })
+
+    it('warns when unsupported legacy cache options are provided', () => {
+      new BedrockModel({
+        cachePrompt: 'default',
+        cacheTools: 'default',
+      } as any)
+
+      expect(warnOnce).toHaveBeenCalledWith(
+        expect.anything(),
+        'unsupported_fields=<cachePrompt,cacheTools> | cachePrompt and cacheTools are not supported by BedrockModel, use cacheConfig instead'
+      )
+    })
   })
 
   describe('format_message', async () => {
