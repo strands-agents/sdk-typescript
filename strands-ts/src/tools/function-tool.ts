@@ -250,7 +250,7 @@ export class FunctionTool extends Tool implements InvokableTool<unknown, JSONVal
    * - Arrays of content blocks → used directly as content array
    * - Strings → TextBlock
    * - Numbers, Booleans → TextBlock (converted to string)
-   * - null, undefined → TextBlock (special string representation)
+   * - null, undefined → empty content array (side-effectful tool with no return value)
    * - Objects → JsonBlock (with deep copy)
    * - Arrays (non-content blocks) → JsonBlock wrapped in \{ $value: array \} (with deep copy)
    *
@@ -269,21 +269,13 @@ export class FunctionTool extends Tool implements InvokableTool<unknown, JSONVal
         })
       }
 
-      // Handle null with special string representation as text content
-      if (value === null) {
+      // Handle null/undefined (void tools) with empty content — side-effectful tools
+      // that don't return a value should signal success without a misleading placeholder.
+      if (value === null || value === undefined) {
         return new ToolResultBlock({
           toolUseId,
           status: 'success',
-          content: [new TextBlock('<null>')],
-        })
-      }
-
-      // Handle undefined with special string representation as text content
-      if (value === undefined) {
-        return new ToolResultBlock({
-          toolUseId,
-          status: 'success',
-          content: [new TextBlock('<undefined>')],
+          content: [],
         })
       }
 
