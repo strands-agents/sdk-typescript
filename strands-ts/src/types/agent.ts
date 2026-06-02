@@ -26,6 +26,7 @@ import type {
   StreamEvent,
 } from '../hooks/events.js'
 import type { HookCallback, HookableEventConstructor, HookCallbackOptions, HookCleanup } from '../hooks/types.js'
+import type { Stage, MiddlewareHandler } from '../middleware/types.js'
 import type { ToolRegistry } from '../registry/tool-registry.js'
 import type { Model } from '../models/model.js'
 import type { z } from 'zod'
@@ -341,6 +342,18 @@ export interface LocalAgent {
    * @param snapshot - The snapshot to restore from
    */
   loadSnapshot(snapshot: Snapshot): void
+
+  /**
+   * Register a middleware handler for a given stage.
+   * Middleware wraps stage execution and can intercept, transform, or short-circuit operations.
+   *
+   * @param stage - The stage token identifying the interception point
+   * @param handler - The middleware handler function (async generator)
+   */
+  addMiddleware<TContext, TEvent, TResult>(
+    stage: Stage<TContext, TEvent, TResult>,
+    handler: MiddlewareHandler<TContext, TEvent, TResult>
+  ): void
 }
 
 /**
